@@ -829,10 +829,7 @@ class DefaultAssetPickerBuilderDelegate
             borderRadius: BorderRadius.circular(3.0),
           ),
           child: Text(
-            provider.isSelectedNotEmpty && !isSingleAssetMode
-                ? '${Constants.textDelegate.confirm}'
-                    ' (${provider.selectedAssets.length}/${provider.maxAssets})'
-                : Constants.textDelegate.confirm,
+            Constants.textDelegate.confirm,
             style: TextStyle(
               color: provider.isSelectedNotEmpty
                   ? theme.textTheme.bodyText1?.color
