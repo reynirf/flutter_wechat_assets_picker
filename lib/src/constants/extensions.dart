@@ -8,6 +8,12 @@ extension BuildContextExtension on BuildContext {
   MediaQueryData get mediaQuery => MediaQuery.of(this);
 
   ThemeData get themeData => Theme.of(this);
+
+  double get topPadding => mediaQuery.padding.top;
+
+  double get bottomPadding => mediaQuery.padding.bottom;
+
+  double get bottomInsets => mediaQuery.viewInsets.bottom;
 }
 
 extension BrightnessExtension on Brightness {
@@ -17,9 +23,10 @@ extension BrightnessExtension on Brightness {
 }
 
 extension ColorExtension on Color {
-  bool get isTransparent => this == Colors.transparent;
+  bool get isTransparent => this == Colors.transparent || alpha == 0x00;
 }
 
 extension ThemeDataExtension on ThemeData {
-  Brightness get effectiveBrightness => appBarTheme.brightness ?? brightness;
+  Brightness get effectiveBrightness =>
+      appBarTheme.systemOverlayStyle?.statusBarBrightness ?? brightness;
 }

@@ -2,31 +2,47 @@
 /// [Author] Alex (https://github.com/AlexV525)
 /// [Date] 2020-10-29 21:50
 ///
+import 'dart:async';
 import 'dart:io';
 import 'dart:math' as math;
 import 'dart:typed_data';
 import 'dart:ui' as ui;
 
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
 
 import '../constants/constants.dart';
 import '../widget/builder/asset_entity_grid_item_builder.dart';
+import '../widget/builder/value_listenable_builder_2.dart';
+import '../widget/scale_text.dart';
 
 typedef IndicatorBuilder = Widget Function(
   BuildContext context,
   bool isAssetsEmpty,
 );
 
+/// {@template wechat_assets_picker.AssetSelectPredicate}
+/// Predicate whether an asset can be selected or unselected.
+/// 判断资源可否被选择
+/// {@endtemplate}
+typedef AssetSelectPredicate<Asset> = FutureOr<bool> Function(
+  BuildContext context,
+  Asset asset,
+  bool isSelected,
+);
+
 /// The delegate to build the whole picker's components.
 ///
 /// By extending the delegate, you can customize every components on you own.
 /// Delegate requires two generic types:
-///  * [A] "Asset": The type of your assets. Defaults to [AssetEntity].
-///  * [P] "Path": The type of your paths. Defaults to [AssetPathEntity].
-abstract class AssetPickerBuilderDelegate<A, P> {
+///  * [Asset] The type of your assets. Defaults to [AssetEntity].
+///  * [Path] The type of your paths. Defaults to [AssetPathEntity].
+abstract class AssetPickerBuilderDelegate<Asset, Path> {
   AssetPickerBuilderDelegate({
     required this.provider,
+    required this.initialPermission,
     this.gridCount = 4,
     Color? themeColor,
     AssetsPickerTextDelegate? textDelegate,
@@ -35,18 +51,29 @@ abstract class AssetPickerBuilderDelegate<A, P> {
     this.specialItemBuilder,
     this.loadingIndicatorBuilder,
     this.allowSpecialItemWhenEmpty = false,
+    this.keepScrollOffset = false,
+    this.selectPredicate,
+    this.shouldRevertGrid,
   })  : assert(
           pickerTheme == null || themeColor == null,
           'Theme and theme color cannot be set at the same time.',
         ),
         themeColor =
             pickerTheme?.colorScheme.secondary ?? themeColor ?? C.themeColor {
-    Constants.textDelegate = textDelegate ?? DefaultAssetsPickerTextDelegate();
+    Constants.textDelegate = textDelegate ?? AssetsPickerTextDelegate();
+    // Add the listener if [keepScrollOffset] is true.
+    if (keepScrollOffset) {
+      gridScrollController.addListener(keepScrollOffsetListener);
+    }
   }
 
   /// [ChangeNotifier] for asset picker.
   /// 资源选择器状态保持
-  final AssetPickerProvider<A, P> provider;
+  final AssetPickerProvider<Asset, Path> provider;
+
+  /// The [PermissionState] when the picker is called.
+  /// 当选择器被拉起时的权限状态
+  final PermissionState initialPermission;
 
   /// Assets count for the picker.
   /// 资源网格数
@@ -82,8 +109,26 @@ abstract class AssetPickerBuilderDelegate<A, P> {
   /// 当没有资源时是否显示自定义item
   final bool allowSpecialItemWhenEmpty;
 
+  /// Whether the picker should save the scroll offset between pushes and pops.
+  /// 选择器是否可以从同样的位置开始选择
+  final bool keepScrollOffset;
+
+  /// {@macro wechat_assets_picker.AssetSelectPredicate}
+  final AssetSelectPredicate<Asset>? selectPredicate;
+
   /// The [ScrollController] for the preview grid.
   final ScrollController gridScrollController = ScrollController();
+
+  /// The [GlobalKey] for [assetsGridBuilder] to locate the [ScrollView.center].
+  /// [assetsGridBuilder] 用于定位 [ScrollView.center] 的 [GlobalKey]
+  final GlobalKey gridRevertKey = GlobalKey();
+
+  /// Whether the assets grid should revert.
+  /// 判断资源网格是否需要倒序排列
+  ///
+  /// [Null] means judging by [isAppleOS].
+  /// 使用 [Null] 即使用 [isAppleOS] 进行判断。
+  final bool? shouldRevertGrid;
 
   /// [ThemeData] for the picker.
   /// 选择器使用的主题
@@ -98,6 +143,14 @@ abstract class AssetPickerBuilderDelegate<A, P> {
           ? SystemUiOverlayStyle.light
           : SystemUiOverlayStyle.dark);
 
+  /// The color for interactive texts.
+  /// 可交互的文字的颜色
+  Color interactiveTextColor(BuildContext context) => Color.lerp(
+        context.themeData.iconTheme.color?.withOpacity(.7) ?? Colors.white,
+        Colors.blueAccent,
+        0.4,
+      )!;
+
   /// Whether the current platform is Apple OS.
   /// 当前平台是否苹果系列系统 (iOS & MacOS)
   bool get isAppleOS => Platform.isIOS || Platform.isMacOS;
@@ -108,19 +161,64 @@ abstract class AssetPickerBuilderDelegate<A, P> {
 
   /// Space between assets item widget.
   /// 资源部件之间的间隔
-  double get itemSpacing => 2.0;
+  double get itemSpacing => 2;
 
   /// Item's height in app bar.
   /// 顶栏内各个组件的统一高度
-  double get appBarItemHeight => 32.0;
+  double get appBarItemHeight => 32;
 
   /// Blur radius in Apple OS layout mode.
   /// 苹果系列系统布局方式下的模糊度
-  double get appleOSBlurRadius => 15.0;
+  double get appleOSBlurRadius => 10;
+
+  /// Height for the bottom occupied section.
+  /// 底部区域占用的高度
+  double get bottomSectionHeight =>
+      bottomActionBarHeight + permissionLimitedBarHeight;
 
   /// Height for bottom action bar.
   /// 底部操作栏的高度
   double get bottomActionBarHeight => kToolbarHeight / 1.1;
+
+  /// Height for the permission limited bar.
+  /// 权限受限栏的高度
+  double get permissionLimitedBarHeight => isPermissionLimited ? 75 : 0;
+
+  /// Notifier for the current [PermissionState].
+  /// 当前 [PermissionState] 的监听
+  late final ValueNotifier<PermissionState> permission =
+      ValueNotifier<PermissionState>(
+    initialPermission,
+  );
+  final ValueNotifier<bool> permissionOverlayHidden =
+      ValueNotifier<bool>(false);
+
+  /// Whether the permission is limited currently.
+  /// 当前的权限是否为受限
+  bool get isPermissionLimited => permission.value == PermissionState.limited;
+
+  bool get effectiveShouldRevertGrid => shouldRevertGrid ?? isAppleOS;
+
+  /// The listener to track the scroll position of the [gridScrollController]
+  /// if [keepScrollOffset] is true.
+  /// 当 [keepScrollOffset] 为 true 时，跟踪 [gridScrollController] 位置的监听。
+  void keepScrollOffsetListener() {
+    if (gridScrollController.hasClients) {
+      Constants.scrollPosition = gridScrollController.position;
+    }
+  }
+
+  /// Keep a dispose method to sync with [State].
+  /// 保留一个 dispose 方法与 [State] 同步。
+  ///
+  /// Be aware that the method will do nothing when [keepScrollOffset] is true.
+  /// 注意当 [keepScrollOffset] 为 true 时方法不会进行释放。
+  void dispose() {
+    Constants.scrollPosition = null;
+    gridScrollController.dispose();
+    permission.dispose();
+    permissionOverlayHidden.dispose();
+  }
 
   /// Path entity select widget builder.
   /// 路径选择部件构建
@@ -130,7 +228,7 @@ abstract class AssetPickerBuilderDelegate<A, P> {
   /// 路径单独条目选择组件
   Widget pathEntityWidget({
     required BuildContext context,
-    required Map<P, Uint8List?> list,
+    required Map<Path, Uint8List?> list,
     required int index,
     bool isAudio = false,
   });
@@ -153,13 +251,13 @@ abstract class AssetPickerBuilderDelegate<A, P> {
   Widget confirmButton(BuildContext context);
 
   /// GIF image type indicator.
-  /// GIF类型图片指示
-  Widget gifIndicator(BuildContext context, A asset) {
+  /// GIF 类型图片指示
+  Widget gifIndicator(BuildContext context, Asset asset) {
     return PositionedDirectional(
       start: 0,
       bottom: 0,
       child: Container(
-        padding: const EdgeInsets.all(6.0),
+        padding: const EdgeInsets.all(6),
         decoration: BoxDecoration(
           gradient: LinearGradient(
             begin: AlignmentDirectional.bottomCenter,
@@ -171,23 +269,20 @@ abstract class AssetPickerBuilderDelegate<A, P> {
           padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 1),
           decoration: !isAppleOS
               ? BoxDecoration(
-                  borderRadius: BorderRadius.circular(2.0),
+                  borderRadius: BorderRadius.circular(2),
                   color: theme.iconTheme.color!.withOpacity(0.75),
                 )
               : null,
-          child: Text(
+          child: ScaleText(
             Constants.textDelegate.gifIndicator,
             style: TextStyle(
               color: isAppleOS
                   ? theme.textTheme.bodyText2?.color
                   : theme.primaryColor,
-              fontSize: isAppleOS ? 14.0 : 12.0,
-              fontWeight: isAppleOS ? FontWeight.w500 : FontWeight.normal,
+              fontSize: 13,
+              fontWeight: FontWeight.w500,
             ),
-            strutStyle: const StrutStyle(
-              forceStrutHeight: true,
-              height: 1.0,
-            ),
+            strutStyle: const StrutStyle(forceStrutHeight: true, height: 1),
           ),
         ),
       ),
@@ -196,44 +291,61 @@ abstract class AssetPickerBuilderDelegate<A, P> {
 
   /// Audio asset type indicator.
   /// 音频类型资源指示
-  Widget audioIndicator(BuildContext context, A asset);
+  Widget audioIndicator(BuildContext context, Asset asset);
 
   /// Video asset type indicator.
   /// 视频类型资源指示
-  Widget videoIndicator(BuildContext context, A asset);
+  Widget videoIndicator(BuildContext context, Asset asset);
 
   /// Animated backdrop widget for items.
   /// 部件选中时的动画遮罩部件
   Widget selectedBackdrop(
     BuildContext context,
     int index,
-    A asset,
+    Asset asset,
   );
 
   /// Indicator for assets selected status.
   /// 资源是否已选的指示器
-  Widget selectIndicator(BuildContext context, A asset);
+  Widget selectIndicator(BuildContext context, Asset asset);
+
+  /// Indicator when the asset cannot be selected.
+  /// 当资源无法被选中时的遮罩
+  Widget itemBannedIndicator(BuildContext context, Asset asset) {
+    return Consumer<AssetPickerProvider<Asset, Path>>(
+      builder: (_, AssetPickerProvider<Asset, Path> p, __) {
+        if (!p.selectedAssets.contains(asset) && p.selectedMaximumAssets) {
+          return Container(
+            color: theme.colorScheme.background.withOpacity(.85),
+          );
+        }
+        return const SizedBox.shrink();
+      },
+    );
+  }
 
   /// Loading indicator.
   /// 加载指示器
   Widget loadingIndicator(BuildContext context) {
     return Center(
-      child: Selector<AssetPickerProvider<A, P>, bool>(
-        selector: (_, AssetPickerProvider<A, P> provider) =>
+      child: Selector<AssetPickerProvider<Asset, Path>, bool>(
+        selector: (_, AssetPickerProvider<Asset, Path> provider) =>
             provider.isAssetsEmpty,
         builder: (BuildContext c, bool isAssetsEmpty, Widget? w) {
           if (loadingIndicatorBuilder != null) {
             return loadingIndicatorBuilder!(c, isAssetsEmpty);
           }
           if (isAssetsEmpty) {
-            return const Text('Nothing here.');
-          } else {
-            return w!;
+            return ScaleText(
+              Constants.textDelegate.emptyList,
+              maxScaleFactor: 1.5,
+            );
           }
+          return w!;
         },
         child: PlatformProgressIndicator(
           color: theme.iconTheme.color,
-          size: Screens.width / gridCount / 3,
+          size: context.mediaQuery.size.width / gridCount / 3,
         ),
       ),
     );
@@ -243,83 +355,57 @@ abstract class AssetPickerBuilderDelegate<A, P> {
   /// 资源缩略数据加载失败时使用的部件
   Widget failedItemBuilder(BuildContext context) {
     return Center(
-      child: Text(
+      child: ScaleText(
         Constants.textDelegate.loadFailed,
         textAlign: TextAlign.center,
-        style: const TextStyle(fontSize: 18.0),
+        style: const TextStyle(fontSize: 18),
       ),
     );
+  }
+
+  /// The effective direction for the assets grid.
+  /// 网格实际的方向
+  ///
+  /// By default, the direction will be reversed if it's iOS/macOS.
+  /// 默认情况下，在 iOS/macOS 上方向会反向。
+  TextDirection effectiveGridDirection(BuildContext context) {
+    final TextDirection _od = Directionality.of(context);
+    if (effectiveShouldRevertGrid) {
+      if (_od == TextDirection.ltr) {
+        return TextDirection.rtl;
+      }
+      return TextDirection.ltr;
+    }
+    return _od;
   }
 
   /// The main grid view builder for assets.
   /// 主要的资源查看网格部件
-  Widget assetsGridBuilder(BuildContext context) {
-    return ColoredBox(
-      color: theme.canvasColor,
-      child: Selector<AssetPickerProvider<A, P>, List<A>>(
-        selector: (_, AssetPickerProvider<A, P> provider) =>
-            provider.currentAssets,
-        builder: (_, List<A> currentAssets, __) => CustomScrollView(
-          controller: gridScrollController,
-          slivers: <Widget>[
-            if (isAppleOS)
-              SliverToBoxAdapter(
-                child: SizedBox(
-                  height: Screens.topSafeHeight + kToolbarHeight,
-                ),
-              ),
-            SliverGrid(
-              delegate: SliverChildBuilderDelegate(
-                (_, int index) => Builder(
-                  builder: (BuildContext c) => assetGridItemBuilder(
-                    c,
-                    index,
-                    currentAssets,
-                  ),
-                ),
-                childCount: assetsGridItemCount(_, currentAssets),
-                findChildIndexCallback: (Key? key) {
-                  if (key is ValueKey<String>) {
-                    return findChildIndexBuilder(
-                      key.value,
-                      currentAssets,
-                    );
-                  }
-                  return null;
-                },
-              ),
-              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: gridCount,
-                mainAxisSpacing: itemSpacing,
-                crossAxisSpacing: itemSpacing,
-              ),
-            ),
-            if (isAppleOS)
-              SliverToBoxAdapter(
-                child: SizedBox(
-                  height: Screens.bottomSafeHeight + bottomActionBarHeight,
-                ),
-              ),
-          ],
-        ),
-      ),
-    );
-  }
+  Widget assetsGridBuilder(BuildContext context);
 
   /// Indicates how would the grid found a reusable [RenderObject] through [id].
   /// 为 Grid 布局指示如何找到可复用的 [RenderObject]。
-  int? findChildIndexBuilder(String id, List<A> currentAssets) => null;
+  int? findChildIndexBuilder({
+    required String id,
+    required List<Asset> assets,
+    int placeholderCount = 0,
+  }) =>
+      null;
 
   /// The function which return items count for the assets' grid.
   /// 为资源列表提供内容数量计算的方法
-  int assetsGridItemCount(BuildContext context, List<A> currentAssets);
+  int assetsGridItemCount({
+    required BuildContext context,
+    required List<Asset> assets,
+    int placeholderCount = 0,
+  });
 
   /// The item builder for the assets' grid.
   /// 资源列表项的构建
   Widget assetGridItemBuilder(
     BuildContext context,
     int index,
-    List<A> currentAssets,
+    List<Asset> currentAssets,
   );
 
   /// The item builder for audio type of asset.
@@ -327,7 +413,7 @@ abstract class AssetPickerBuilderDelegate<A, P> {
   Widget audioItemBuilder(
     BuildContext context,
     int index,
-    A asset,
+    Asset asset,
   );
 
   /// The item builder for images and video type of asset.
@@ -335,42 +421,80 @@ abstract class AssetPickerBuilderDelegate<A, P> {
   Widget imageAndVideoItemBuilder(
     BuildContext context,
     int index,
-    A asset,
+    Asset asset,
   );
 
   /// Preview button to preview selected assets.
   /// 预览已选资源的按钮
   Widget previewButton(BuildContext context);
 
+  /// The tip widget displays when the access is limited.
+  /// 当访问受限时在底部展示的提示
+  Widget accessLimitedBottomTip(BuildContext context) {
+    return GestureDetector(
+      onTap: PhotoManager.openSetting,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10),
+        height: permissionLimitedBarHeight,
+        color: theme.primaryColor.withOpacity(isAppleOS ? 0.90 : 1),
+        child: Row(
+          children: <Widget>[
+            const SizedBox(width: 5),
+            Icon(
+              Icons.warning,
+              color: Colors.orange[400]!.withOpacity(.8),
+            ),
+            const SizedBox(width: 15),
+            Expanded(
+              child: ScaleText(
+                Constants.textDelegate.accessAllTip,
+                style: context.themeData.textTheme.caption?.copyWith(
+                  fontSize: 14,
+                ),
+              ),
+            ),
+            Icon(
+              Icons.keyboard_arrow_right,
+              color: context.themeData.iconTheme.color?.withOpacity(.5),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   /// Action bar widget aligned to bottom.
   /// 底部操作栏部件
   Widget bottomActionBar(BuildContext context) {
     Widget child = Container(
-      width: Screens.width,
-      height: bottomActionBarHeight + Screens.bottomSafeHeight,
-      padding: EdgeInsetsDirectional.only(
-        start: 20.0,
-        end: 20.0,
-        bottom: Screens.bottomSafeHeight,
+      height: bottomActionBarHeight + context.bottomPadding,
+      padding: const EdgeInsets.symmetric(horizontal: 20).copyWith(
+        bottom: context.bottomPadding,
       ),
-      color: theme.primaryColor.withOpacity(isAppleOS ? 0.90 : 1.0),
-      child: Row(children: <Widget>[
-        if (!isSingleAssetMode || !isAppleOS) previewButton(context),
-        if (isAppleOS) const Spacer(),
-        if (isAppleOS) confirmButton(context),
-      ]),
+      color: theme.primaryColor.withOpacity(isAppleOS ? 0.90 : 1),
+      child: Row(
+        children: <Widget>[
+          if (!isSingleAssetMode || !isAppleOS) previewButton(context),
+          if (isAppleOS) const Spacer(),
+          if (isAppleOS) confirmButton(context),
+        ],
+      ),
     );
-    if (isAppleOS) {
-      child = ClipRect(
-        child: BackdropFilter(
-          filter: ui.ImageFilter.blur(
-            sigmaX: appleOSBlurRadius,
-            sigmaY: appleOSBlurRadius,
-          ),
-          child: child,
-        ),
+    if (isPermissionLimited) {
+      child = Column(
+        mainAxisSize: MainAxisSize.min,
+        children: <Widget>[accessLimitedBottomTip(context), child],
       );
     }
+    child = ClipRect(
+      child: BackdropFilter(
+        filter: ui.ImageFilter.blur(
+          sigmaX: appleOSBlurRadius,
+          sigmaY: appleOSBlurRadius,
+        ),
+        child: child,
+      ),
+    );
     return child;
   }
 
@@ -378,32 +502,11 @@ abstract class AssetPickerBuilderDelegate<A, P> {
   /// 返回按钮
   Widget backButton(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4.0),
-      child: () {
-        if (isAppleOS) {
-          return GestureDetector(
-            onTap: Navigator.of(context).maybePop,
-            child: Container(
-              margin: isAppleOS
-                  ? const EdgeInsets.symmetric(horizontal: 20.0)
-                  : null,
-              child: IntrinsicWidth(
-                child: Center(
-                  child: Text(
-                    Constants.textDelegate.cancel,
-                    style: const TextStyle(fontSize: 18.0),
-                  ),
-                ),
-              ),
-            ),
-          );
-        } else {
-          return IconButton(
-            onPressed: Navigator.of(context).maybePop,
-            icon: const Icon(Icons.close),
-          );
-        }
-      }(),
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: IconButton(
+        onPressed: Navigator.of(context).maybePop,
+        icon: const Icon(Icons.close),
+      ),
     );
   }
 
@@ -419,18 +522,119 @@ abstract class AssetPickerBuilderDelegate<A, P> {
   /// Android设备的选择器布局
   Widget androidLayout(BuildContext context);
 
+  /// The overlay when the permission is limited on iOS.
+  Widget iOSPermissionOverlay(BuildContext context) {
+    final Size size = context.mediaQuery.size;
+    final Widget _closeButton = Container(
+      margin: const EdgeInsetsDirectional.only(start: 16, top: 4),
+      alignment: AlignmentDirectional.centerStart,
+      child: IconButton(
+        onPressed: Navigator.of(context).maybePop,
+        icon: const Icon(Icons.close),
+        padding: EdgeInsets.zero,
+        constraints: BoxConstraints.tight(const Size.square(32)),
+      ),
+    );
+
+    final Widget _limitedTips = Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 30),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: <Widget>[
+          ScaleText(
+            Constants.textDelegate.unableToAccessAll,
+            style: const TextStyle(fontSize: 22),
+            textAlign: TextAlign.center,
+          ),
+          SizedBox(height: size.height / 30),
+          ScaleText(
+            Constants.textDelegate.accessAllTip,
+            style: const TextStyle(fontSize: 18),
+            textAlign: TextAlign.center,
+          ),
+        ],
+      ),
+    );
+
+    final Widget _goToSettingsButton = MaterialButton(
+      elevation: 0,
+      minWidth: size.width / 2,
+      height: appBarItemHeight * 1.25,
+      padding: const EdgeInsets.symmetric(horizontal: 24),
+      color: themeColor,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(5),
+      ),
+      child: ScaleText(
+        Constants.textDelegate.goToSystemSettings,
+        style: const TextStyle(fontSize: 17),
+      ),
+      onPressed: PhotoManager.openSetting,
+      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+    );
+
+    final Widget _accessLimitedButton = GestureDetector(
+      onTap: () => permissionOverlayHidden.value = true,
+      child: ScaleText(
+        Constants.textDelegate.accessLimitedAssets,
+        style: TextStyle(color: interactiveTextColor(context)),
+      ),
+    );
+
+    return ValueListenableBuilder2<PermissionState, bool>(
+      firstNotifier: permission,
+      secondNotifier: permissionOverlayHidden,
+      builder: (_, PermissionState ps, bool isHidden, __) {
+        if (ps.isAuth || isHidden) {
+          return const SizedBox.shrink();
+        }
+        return Positioned.fill(
+          child: Container(
+            padding: context.mediaQuery.padding,
+            color: context.themeData.canvasColor,
+            child: Column(
+              children: <Widget>[
+                _closeButton,
+                Expanded(child: _limitedTips),
+                _goToSettingsButton,
+                SizedBox(height: size.height / 18),
+                _accessLimitedButton,
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
   /// Yes, the build method.
   /// 没错，是它是它就是它，我们亲爱的 build 方法~
   Widget build(BuildContext context) {
+    // Schedule the scroll position's restoration callback if this feature
+    // is enabled and offsets are different.
+    if (keepScrollOffset && Constants.scrollPosition != null) {
+      SchedulerBinding.instance!.addPostFrameCallback((_) {
+        // Update only if the controller has clients.
+        if (gridScrollController.hasClients) {
+          gridScrollController.jumpTo(Constants.scrollPosition!.pixels);
+        }
+      });
+    }
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: overlayStyle,
       child: Theme(
         data: theme,
-        child: ChangeNotifierProvider<AssetPickerProvider<A, P>>.value(
+        child: ChangeNotifierProvider<AssetPickerProvider<Asset, Path>>.value(
           value: provider,
-          child: Material(
+          builder: (BuildContext c, __) => Material(
             color: theme.canvasColor,
-            child: isAppleOS ? appleOSLayout(context) : androidLayout(context),
+            child: Stack(
+              fit: StackFit.expand,
+              children: <Widget>[
+                if (isAppleOS) appleOSLayout(c) else androidLayout(c),
+                if (Platform.isIOS) iOSPermissionOverlay(c),
+              ],
+            ),
           ),
         ),
       ),
@@ -442,6 +646,7 @@ class DefaultAssetPickerBuilderDelegate
     extends AssetPickerBuilderDelegate<AssetEntity, AssetPathEntity> {
   DefaultAssetPickerBuilderDelegate({
     required DefaultAssetPickerProvider provider,
+    required PermissionState initialPermission,
     int gridCount = 4,
     Color? themeColor,
     AssetsPickerTextDelegate? textDelegate,
@@ -450,6 +655,9 @@ class DefaultAssetPickerBuilderDelegate
     WidgetBuilder? specialItemBuilder,
     IndicatorBuilder? loadingIndicatorBuilder,
     bool allowSpecialItemWhenEmpty = false,
+    bool keepScrollOffset = false,
+    AssetSelectPredicate<AssetEntity>? selectPredicate,
+    bool? shouldRevertGrid,
     this.gridThumbSize = Constants.defaultGridThumbSize,
     this.previewThumbSize,
     this.specialPickerType,
@@ -459,6 +667,7 @@ class DefaultAssetPickerBuilderDelegate
         ),
         super(
           provider: provider,
+          initialPermission: initialPermission,
           gridCount: gridCount,
           themeColor: themeColor,
           textDelegate: textDelegate,
@@ -467,6 +676,9 @@ class DefaultAssetPickerBuilderDelegate
           specialItemBuilder: specialItemBuilder,
           loadingIndicatorBuilder: loadingIndicatorBuilder,
           allowSpecialItemWhenEmpty: allowSpecialItemWhenEmpty,
+          keepScrollOffset: keepScrollOffset,
+          selectPredicate: selectPredicate,
+          shouldRevertGrid: shouldRevertGrid,
         );
 
   /// Thumbnail size in the grid.
@@ -510,7 +722,7 @@ class DefaultAssetPickerBuilderDelegate
 
   /// [Duration] when triggering path switching.
   /// 切换路径时的动画时长
-  Duration get switchingPathDuration => kThemeAnimationDuration * 1.5;
+  Duration get switchingPathDuration => kThemeAnimationDuration;
 
   /// [Curve] when triggering path switching.
   /// 切换路径时的动画曲线
@@ -564,7 +776,7 @@ class DefaultAssetPickerBuilderDelegate
   @override
   PreferredSizeWidget appBar(BuildContext context) {
     return FixedAppBar(
-      backgroundColor: theme.appBarTheme.color,
+      backgroundColor: theme.appBarTheme.backgroundColor,
       centerTitle: isAppleOS,
       title: pathEntitySelector(context),
       leading: backButton(context),
@@ -579,8 +791,8 @@ class DefaultAssetPickerBuilderDelegate
               (isPreviewEnabled || !isSingleAssetMode)
           ? <Widget>[confirmButton(context)]
           : null,
-      actionsPadding: const EdgeInsetsDirectional.only(end: 14.0),
-      blurRadius: isAppleOS ? appleOSBlurRadius : 0.0,
+      actionsPadding: const EdgeInsetsDirectional.only(end: 14),
+      blurRadius: isAppleOS ? appleOSBlurRadius : 0,
     );
   }
 
@@ -591,32 +803,41 @@ class DefaultAssetPickerBuilderDelegate
         Positioned.fill(
           child: Selector<DefaultAssetPickerProvider, bool>(
             selector: (_, DefaultAssetPickerProvider p) => p.hasAssetsToDisplay,
-            builder: (_, bool hasAssetsToDisplay, __) => AnimatedSwitcher(
-              duration: switchingPathDuration,
-              child: hasAssetsToDisplay
-                  ? Stack(
-                      children: <Widget>[
-                        RepaintBoundary(
-                          child: Stack(
-                            children: <Widget>[
-                              Positioned.fill(
-                                child: assetsGridBuilder(context),
-                              ),
-                              if ((!isSingleAssetMode || isAppleOS) &&
-                                  isPreviewEnabled)
-                                PositionedDirectional(
-                                  bottom: 0.0,
-                                  child: bottomActionBar(context),
-                                ),
-                            ],
+            builder: (_, bool hasAssetsToDisplay, __) {
+              final Widget _child;
+              final bool shouldDisplayAssets = hasAssetsToDisplay ||
+                  (allowSpecialItemWhenEmpty &&
+                      specialItemPosition != SpecialItemPosition.none);
+              if (shouldDisplayAssets) {
+                _child = Stack(
+                  children: <Widget>[
+                    RepaintBoundary(
+                      child: Stack(
+                        children: <Widget>[
+                          Positioned.fill(
+                            child: assetsGridBuilder(context),
                           ),
-                        ),
-                        pathEntityListBackdrop(context),
-                        pathEntityListWidget(context),
-                      ],
-                    )
-                  : loadingIndicator(context),
-            ),
+                          if ((!isSingleAssetMode || isAppleOS) &&
+                              isPreviewEnabled)
+                            Positioned.fill(
+                              top: null,
+                              child: bottomActionBar(context),
+                            ),
+                        ],
+                      ),
+                    ),
+                    pathEntityListBackdrop(context),
+                    pathEntityListWidget(context),
+                  ],
+                );
+              } else {
+                _child = loadingIndicator(context);
+              }
+              return AnimatedSwitcher(
+                duration: switchingPathDuration,
+                child: _child,
+              );
+            },
           ),
         ),
         appBar(context),
@@ -624,7 +845,145 @@ class DefaultAssetPickerBuilderDelegate
     );
   }
 
-  /// There're several conditions within this builder:
+  @override
+  Widget assetsGridBuilder(BuildContext context) {
+    return Selector<DefaultAssetPickerProvider, AssetPathEntity?>(
+      selector: (_, DefaultAssetPickerProvider p) => p.currentPathEntity,
+      builder: (_, AssetPathEntity? path, __) {
+        // First, we need the count of the assets.
+        int totalCount = path?.assetCount ?? 0;
+        // If user chose a special item's position, add 1 count.
+        if (specialItemPosition != SpecialItemPosition.none &&
+            path?.isAll == true) {
+          totalCount += 1;
+        }
+        // Then we use the [totalCount] to calculate placeholders we need.
+        final int placeholderCount;
+        if (effectiveShouldRevertGrid && totalCount % gridCount != 0) {
+          // When there are left items that not filled into one row,
+          // filled the row with placeholders.
+          placeholderCount = gridCount - totalCount % gridCount;
+        } else {
+          // Otherwise, we don't need placeholders.
+          placeholderCount = 0;
+        }
+        // Calculate rows count.
+        final int row = (totalCount + placeholderCount) ~/ gridCount;
+        // Here we got a magic calculation. [itemSpacing] needs to be divided by
+        // [gridCount] since every grid item is squeezed by the [itemSpacing],
+        // and it's actual size is reduced with [itemSpacing / gridCount].
+        final double dividedSpacing = itemSpacing / gridCount;
+        final double topPadding = context.topPadding + kToolbarHeight;
+
+        Widget _sliverGrid(BuildContext ctx, List<AssetEntity> assets) {
+          return SliverGrid(
+            delegate: SliverChildBuilderDelegate(
+              (_, int index) => Builder(
+                builder: (BuildContext c) {
+                  if (effectiveShouldRevertGrid) {
+                    if (index < placeholderCount) {
+                      return const SizedBox.shrink();
+                    }
+                    index -= placeholderCount;
+                  }
+                  return Directionality(
+                    textDirection: Directionality.of(context),
+                    child: assetGridItemBuilder(c, index, assets),
+                  );
+                },
+              ),
+              childCount: assetsGridItemCount(
+                context: ctx,
+                assets: assets,
+                placeholderCount: placeholderCount,
+              ),
+              findChildIndexCallback: (Key? key) {
+                if (key is ValueKey<String>) {
+                  return findChildIndexBuilder(
+                    id: key.value,
+                    assets: assets,
+                    placeholderCount: placeholderCount,
+                  );
+                }
+                return null;
+              },
+            ),
+            gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: gridCount,
+              mainAxisSpacing: itemSpacing,
+              crossAxisSpacing: itemSpacing,
+            ),
+          );
+        }
+
+        return LayoutBuilder(
+          builder: (BuildContext c, BoxConstraints constraints) {
+            final double itemSize = constraints.maxWidth / gridCount;
+            // Check whether all rows can be placed at the same time.
+            final bool onlyOneScreen = row * itemSize <=
+                constraints.maxHeight -
+                    context.bottomPadding -
+                    topPadding -
+                    permissionLimitedBarHeight;
+            final double height;
+            if (onlyOneScreen) {
+              height = constraints.maxHeight;
+            } else {
+              // Reduce [permissionLimitedBarHeight] for the final height.
+              height = constraints.maxHeight - permissionLimitedBarHeight;
+            }
+            // Use [ScrollView.anchor] to determine where is the first place of
+            // the [SliverGrid]. Each row needs [dividedSpacing] to calculate,
+            // then minus one times of [itemSpacing] because spacing's count in the
+            // cross axis is always less than the rows.
+            final double anchor = math.min(
+              (row * (itemSize + dividedSpacing) + topPadding - itemSpacing) /
+                  height,
+              1,
+            );
+
+            return Directionality(
+              textDirection: effectiveGridDirection(context),
+              child: ColoredBox(
+                color: theme.canvasColor,
+                child: Selector<DefaultAssetPickerProvider, List<AssetEntity>>(
+                  selector: (_, DefaultAssetPickerProvider p) =>
+                      p.currentAssets,
+                  builder: (_, List<AssetEntity> assets, __) {
+                    final SliverGap _bottomGap = SliverGap.v(
+                      context.bottomPadding + bottomSectionHeight,
+                    );
+                    return CustomScrollView(
+                      physics: const AlwaysScrollableScrollPhysics(),
+                      controller: gridScrollController,
+                      anchor: effectiveShouldRevertGrid ? anchor : 0,
+                      center: effectiveShouldRevertGrid ? gridRevertKey : null,
+                      slivers: <Widget>[
+                        if (isAppleOS)
+                          SliverGap.v(context.topPadding + kToolbarHeight),
+                        _sliverGrid(_, assets),
+                        // Ignore the gap when the [anchor] is not equal to 1.
+                        if (effectiveShouldRevertGrid && anchor == 1)
+                          _bottomGap,
+                        if (effectiveShouldRevertGrid)
+                          SliverToBoxAdapter(
+                            key: gridRevertKey,
+                            child: const SizedBox.shrink(),
+                          ),
+                        if (isAppleOS && !effectiveShouldRevertGrid) _bottomGap,
+                      ],
+                    );
+                  },
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  /// There are several conditions within this builder:
   ///  * Return [specialItemBuilder] while the current path is all and
   ///    [specialItemPosition] is not equal to [SpecialItemPosition.none].
   ///  * Return item builder according to the asset's type.
@@ -711,26 +1070,34 @@ class DefaultAssetPickerBuilderDelegate
       key: ValueKey<String>(asset.id),
       children: <Widget>[
         builder,
+        selectedBackdrop(context, currentIndex, asset),
         if (!isWeChatMoment || asset.type != AssetType.video)
           selectIndicator(context, asset),
+        itemBannedIndicator(context, asset),
       ],
     );
   }
 
   @override
-  int findChildIndexBuilder(String id, List<AssetEntity> currentAssets) {
-    int index = currentAssets.indexWhere((AssetEntity e) => e.id == id);
+  int findChildIndexBuilder({
+    required String id,
+    required List<AssetEntity> assets,
+    int placeholderCount = 0,
+  }) {
+    int index = assets.indexWhere((AssetEntity e) => e.id == id);
     if (specialItemPosition == SpecialItemPosition.prepend) {
       index += 1;
     }
+    index += placeholderCount;
     return index;
   }
 
   @override
-  int assetsGridItemCount(
-    BuildContext context,
-    List<AssetEntity> currentAssets,
-  ) {
+  int assetsGridItemCount({
+    required BuildContext context,
+    required List<AssetEntity> assets,
+    int placeholderCount = 0,
+  }) {
     final AssetPathEntity? currentPathEntity =
         context.select<DefaultAssetPickerProvider, AssetPathEntity?>(
       (DefaultAssetPickerProvider p) => p.currentPathEntity,
@@ -743,7 +1110,7 @@ class DefaultAssetPickerBuilderDelegate
 
     /// Return actual length if current path is all.
     /// 如果当前目录是全部内容，则返回实际的内容数量。
-    final int _length = currentAssets.length;
+    final int _length = assets.length + placeholderCount;
     if (!currentPathEntity!.isAll) {
       return _length;
     }
@@ -761,7 +1128,7 @@ class DefaultAssetPickerBuilderDelegate
     return Container(
       width: double.maxFinite,
       alignment: AlignmentDirectional.bottomStart,
-      padding: const EdgeInsets.symmetric(horizontal: 2.0, vertical: 8.0),
+      padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 8),
       decoration: BoxDecoration(
         gradient: LinearGradient(
           begin: AlignmentDirectional.bottomCenter,
@@ -770,12 +1137,12 @@ class DefaultAssetPickerBuilderDelegate
         ),
       ),
       child: Padding(
-        padding: const EdgeInsetsDirectional.only(start: 4.0),
-        child: Text(
+        padding: const EdgeInsetsDirectional.only(start: 4),
+        child: ScaleText(
           Constants.textDelegate.durationIndicatorBuilder(
             Duration(seconds: asset.duration),
           ),
-          style: const TextStyle(fontSize: 16.0),
+          style: const TextStyle(fontSize: 16),
         ),
       ),
     );
@@ -788,7 +1155,7 @@ class DefaultAssetPickerBuilderDelegate
         Container(
           width: double.maxFinite,
           alignment: AlignmentDirectional.topStart,
-          padding: const EdgeInsets.symmetric(horizontal: 2.0, vertical: 8.0),
+          padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 8),
           decoration: BoxDecoration(
             gradient: LinearGradient(
               begin: AlignmentDirectional.topCenter,
@@ -797,17 +1164,19 @@ class DefaultAssetPickerBuilderDelegate
             ),
           ),
           child: Padding(
-            padding: const EdgeInsetsDirectional.only(start: 4.0, end: 30.0),
-            child: Text(
+            padding: const EdgeInsetsDirectional.only(start: 4, end: 30),
+            child: ScaleText(
               asset.title ?? '',
-              style: const TextStyle(fontSize: 16.0),
-              maxLines: 1,
+              style: const TextStyle(fontSize: 16),
+              maxLines: 3,
               overflow: TextOverflow.ellipsis,
             ),
           ),
         ),
-        const Center(child: Icon(Icons.audiotrack)),
-        selectedBackdrop(context, index, asset),
+        const Align(
+          alignment: AlignmentDirectional(0.9, 0.8),
+          child: Icon(Icons.audiotrack),
+        ),
         audioIndicator(context, asset),
       ],
     );
@@ -821,26 +1190,26 @@ class DefaultAssetPickerBuilderDelegate
     return Consumer<DefaultAssetPickerProvider>(
       builder: (_, DefaultAssetPickerProvider provider, __) {
         return MaterialButton(
-          minWidth: provider.isSelectedNotEmpty ? 48.0 : 20.0,
+          minWidth: provider.isSelectedNotEmpty ? 48 : 20,
           height: appBarItemHeight,
-          padding: const EdgeInsets.symmetric(horizontal: 12.0),
+          padding: const EdgeInsets.symmetric(horizontal: 12),
           color: provider.isSelectedNotEmpty ? themeColor : theme.dividerColor,
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(3.0),
+            borderRadius: BorderRadius.circular(3),
           ),
-          child: Text(
+          child: ScaleText(
             Constants.textDelegate.confirm,
             style: TextStyle(
               color: provider.isSelectedNotEmpty
                   ? theme.textTheme.bodyText1?.color
                   : theme.textTheme.caption?.color,
-              fontSize: 17.0,
+              fontSize: 17,
               fontWeight: FontWeight.normal,
             ),
           ),
           onPressed: () {
             if (provider.isSelectedNotEmpty) {
-              Navigator.of(context).pop(provider.selectedAssets);
+              Navigator.of(context).maybePop(provider.selectedAssets);
             }
           },
           materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
@@ -876,7 +1245,6 @@ class DefaultAssetPickerBuilderDelegate
             ),
           ),
         ),
-        selectedBackdrop(context, index, asset),
         if (type == SpecialImageType.gif) // 如果为GIF则显示标识
           gifIndicator(context, asset),
         if (asset.type == AssetType.video) // 如果为视频则显示标识
@@ -892,13 +1260,15 @@ class DefaultAssetPickerBuilderDelegate
         selector: (_, DefaultAssetPickerProvider p) => p.isAssetsEmpty,
         builder: (_, bool isAssetsEmpty, __) {
           if (isAssetsEmpty) {
-            return const Text('Nothing here.');
-          } else {
-            return PlatformProgressIndicator(
-              color: theme.iconTheme.color,
-              size: Screens.width / gridCount / 3,
+            return ScaleText(
+              Constants.textDelegate.emptyList,
+              maxScaleFactor: 1.5,
             );
           }
+          return PlatformProgressIndicator(
+            color: theme.iconTheme.color,
+            size: context.mediaQuery.size.width / gridCount / 3,
+          );
         },
       ),
     );
@@ -910,80 +1280,127 @@ class DefaultAssetPickerBuilderDelegate
   /// 当选择器正在选择路径时，它会出现。用户点击它时，列表会折叠收起。
   @override
   Widget pathEntityListBackdrop(BuildContext context) {
-    return Selector<DefaultAssetPickerProvider, bool>(
-      selector: (_, DefaultAssetPickerProvider p) => p.isSwitchingPath,
-      builder: (BuildContext context, bool isSwitchingPath, __) {
-        return IgnorePointer(
+    return Positioned.fill(
+      child: Selector<DefaultAssetPickerProvider, bool>(
+        selector: (_, DefaultAssetPickerProvider p) => p.isSwitchingPath,
+        builder: (_, bool isSwitchingPath, __) => IgnorePointer(
           ignoring: !isSwitchingPath,
           child: GestureDetector(
             onTap: () => provider.isSwitchingPath = false,
             child: AnimatedOpacity(
               duration: switchingPathDuration,
-              opacity: isSwitchingPath ? 1.0 : 0.0,
-              child: Container(color: Colors.black.withOpacity(0.75)),
+              opacity: isSwitchingPath ? .75 : 0,
+              child: const ColoredBox(color: Colors.black),
             ),
           ),
-        );
-      },
+        ),
+      ),
     );
   }
 
   @override
   Widget pathEntityListWidget(BuildContext context) {
-    final double appBarHeight = kToolbarHeight + Screens.topSafeHeight;
-    final double maxHeight = Screens.height * 0.825;
-    final bool isAudio = (provider as DefaultAssetPickerProvider).requestType ==
-        RequestType.audio;
-    return Selector<DefaultAssetPickerProvider, bool>(
-      selector: (_, DefaultAssetPickerProvider p) => p.isSwitchingPath,
-      builder: (_, bool isSwitchingPath, Widget? w) =>
-          AnimatedPositionedDirectional(
-        duration: switchingPathDuration,
-        curve: switchingPathCurve,
-        top: isAppleOS
-            ? !isSwitchingPath
-                ? -maxHeight
-                : appBarHeight
-            : -(!isSwitchingPath ? maxHeight : 1.0),
-        child: AnimatedOpacity(
-          duration: switchingPathDuration,
-          curve: switchingPathCurve,
-          opacity: !isAppleOS || isSwitchingPath ? 1.0 : 0.0,
-          child: Container(
-            width: Screens.width,
-            height: maxHeight,
-            decoration: BoxDecoration(
-              borderRadius: isAppleOS
-                  ? const BorderRadius.vertical(bottom: Radius.circular(10.0))
-                  : null,
-              color: theme.colorScheme.background,
-            ),
-            child: w,
-          ),
+    return Positioned.fill(
+      top: isAppleOS ? context.topPadding + kToolbarHeight : 0,
+      bottom: null,
+      child: ClipRRect(
+        borderRadius: const BorderRadius.vertical(
+          bottom: Radius.circular(10),
         ),
-      ),
-      child: Selector<DefaultAssetPickerProvider, int>(
-        selector: (_, DefaultAssetPickerProvider p) => p.validPathThumbCount,
-        builder: (_, int count, __) => Selector<DefaultAssetPickerProvider,
-            Map<AssetPathEntity, Uint8List?>>(
-          selector: (_, DefaultAssetPickerProvider p) => p.pathEntityList,
-          builder: (BuildContext c, Map<AssetPathEntity, Uint8List?> list, __) {
-            return ListView.separated(
-              padding: const EdgeInsetsDirectional.only(top: 1.0),
-              itemCount: list.length,
-              itemBuilder: (_, int index) => pathEntityWidget(
-                context: c,
-                list: list,
-                index: index,
-                isAudio: isAudio,
+        child: Selector<DefaultAssetPickerProvider, bool>(
+          selector: (_, DefaultAssetPickerProvider p) => p.isSwitchingPath,
+          builder: (_, bool isSwitchingPath, Widget? w) => AnimatedAlign(
+            duration: switchingPathDuration,
+            curve: switchingPathCurve,
+            alignment: Alignment.bottomCenter,
+            heightFactor: isSwitchingPath ? 1 : 0,
+            child: AnimatedOpacity(
+              duration: switchingPathDuration,
+              curve: switchingPathCurve,
+              opacity: !isAppleOS || isSwitchingPath ? 1 : 0,
+              child: Container(
+                constraints: BoxConstraints(
+                  maxHeight:
+                      context.mediaQuery.size.height * (isAppleOS ? .6 : .8),
+                ),
+                color: theme.colorScheme.background,
+                child: w,
               ),
-              separatorBuilder: (BuildContext _, int __) => Container(
-                margin: const EdgeInsetsDirectional.only(start: 60.0),
-                height: 1.0,
-                color: theme.canvasColor,
+            ),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: <Widget>[
+              ValueListenableBuilder<PermissionState>(
+                valueListenable: permission,
+                builder: (_, PermissionState ps, Widget? child) {
+                  if (isPermissionLimited) {
+                    return child!;
+                  }
+                  return const SizedBox.shrink();
+                },
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 20,
+                    vertical: 12,
+                  ),
+                  child: Text.rich(
+                    TextSpan(
+                      children: <TextSpan>[
+                        TextSpan(
+                          text: Constants.textDelegate.viewingLimitedAssetsTip,
+                        ),
+                        TextSpan(
+                          text: ' '
+                              '${Constants.textDelegate.changeAccessibleLimitedAssets}',
+                          style:
+                              TextStyle(color: interactiveTextColor(context)),
+                          recognizer: TapGestureRecognizer()
+                            ..onTap = PhotoManager.presentLimited,
+                        ),
+                      ],
+                    ),
+                    style: context.themeData.textTheme.caption?.copyWith(
+                      fontSize: 14,
+                    ),
+                  ),
+                ),
               ),
-            );
-          },
+              Flexible(
+                child: Selector<DefaultAssetPickerProvider, int>(
+                  selector: (_, DefaultAssetPickerProvider p) =>
+                      p.validPathThumbCount,
+                  builder: (_, int count, __) => Selector<
+                      DefaultAssetPickerProvider,
+                      Map<AssetPathEntity, Uint8List?>>(
+                    selector: (_, DefaultAssetPickerProvider p) =>
+                        p.pathEntityList,
+                    builder: (_, Map<AssetPathEntity, Uint8List?> list, __) {
+                      return ListView.separated(
+                        padding: const EdgeInsetsDirectional.only(top: 1),
+                        shrinkWrap: true,
+                        itemCount: list.length,
+                        itemBuilder: (BuildContext c, int i) =>
+                            pathEntityWidget(
+                          context: c,
+                          list: list,
+                          index: i,
+                          isAudio: (provider as DefaultAssetPickerProvider)
+                                  .requestType ==
+                              RequestType.audio,
+                        ),
+                        separatorBuilder: (_, __) => Container(
+                          margin: const EdgeInsetsDirectional.only(start: 60),
+                          height: 1,
+                          color: theme.canvasColor,
+                        ),
+                      );
+                    },
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -996,8 +1413,10 @@ class DefaultAssetPickerBuilderDelegate
         onTap: () => provider.isSwitchingPath = !provider.isSwitchingPath,
         child: Container(
           height: appBarItemHeight,
-          constraints: BoxConstraints(maxWidth: Screens.width * 0.5),
-          padding: const EdgeInsetsDirectional.only(start: 12.0, end: 6.0),
+          constraints: BoxConstraints(
+            maxWidth: context.mediaQuery.size.width * 0.5,
+          ),
+          padding: const EdgeInsetsDirectional.only(start: 12, end: 6),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(999),
             color: theme.dividerColor,
@@ -1009,21 +1428,24 @@ class DefaultAssetPickerBuilderDelegate
               children: <Widget>[
                 if (p != null)
                   Flexible(
-                    child: Text(
-                      p.name,
+                    child: ScaleText(
+                      isPermissionLimited && p.isAll
+                          ? Constants.textDelegate.accessiblePathName
+                          : p.name,
                       style: const TextStyle(
-                        fontSize: 18.0,
+                        fontSize: 17,
                         fontWeight: FontWeight.normal,
                       ),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
+                      maxScaleFactor: 1.2,
                     ),
                   ),
                 w!,
               ],
             ),
             child: Padding(
-              padding: const EdgeInsetsDirectional.only(start: 5.0),
+              padding: const EdgeInsetsDirectional.only(start: 5),
               child: DecoratedBox(
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
@@ -1034,13 +1456,13 @@ class DefaultAssetPickerBuilderDelegate
                       p.isSwitchingPath,
                   builder: (_, bool isSwitchingPath, Widget? w) =>
                       Transform.rotate(
-                    angle: isSwitchingPath ? math.pi : 0.0,
+                    angle: isSwitchingPath ? math.pi : 0,
                     alignment: Alignment.center,
                     child: w,
                   ),
                   child: Icon(
                     Icons.keyboard_arrow_down,
-                    size: 20.0,
+                    size: 20,
                     color: theme.colorScheme.primary,
                   ),
                 ),
@@ -1078,11 +1500,8 @@ class DefaultAssetPickerBuilderDelegate
       // 但通过 `File` 读取的文件对象仍然存在，使得返回的数据为空。
       if (data != null) {
         return Image.memory(data, fit: BoxFit.cover);
-      } else {
-        return ColoredBox(
-          color: theme.colorScheme.primary.withOpacity(0.12),
-        );
       }
+      return ColoredBox(color: theme.colorScheme.primary.withOpacity(0.12));
     }
 
     return Material(
@@ -1094,36 +1513,38 @@ class DefaultAssetPickerBuilderDelegate
           gridScrollController.jumpTo(0);
         },
         child: SizedBox(
-          height: isAppleOS ? 64.0 : 52.0,
+          height: isAppleOS ? 64 : 52,
           child: Row(
             children: <Widget>[
               RepaintBoundary(
-                child: AspectRatio(aspectRatio: 1.0, child: builder()),
+                child: AspectRatio(aspectRatio: 1, child: builder()),
               ),
               Expanded(
                 child: Padding(
                   padding: const EdgeInsetsDirectional.only(
-                    start: 15.0,
-                    end: 20.0,
+                    start: 15,
+                    end: 20,
                   ),
                   child: Row(
                     children: <Widget>[
                       Flexible(
                         child: Padding(
-                          padding: const EdgeInsetsDirectional.only(end: 10.0),
-                          child: Text(
-                            pathEntity.name,
-                            style: const TextStyle(fontSize: 18.0),
+                          padding: const EdgeInsetsDirectional.only(end: 10),
+                          child: ScaleText(
+                            isPermissionLimited && pathEntity.isAll
+                                ? Constants.textDelegate.accessiblePathName
+                                : pathEntity.name,
+                            style: const TextStyle(fontSize: 17),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                           ),
                         ),
                       ),
-                      Text(
+                      ScaleText(
                         '(${pathEntity.assetCount})',
                         style: TextStyle(
                           color: theme.textTheme.caption?.color,
-                          fontSize: 18.0,
+                          fontSize: 17,
                         ),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
@@ -1136,14 +1557,13 @@ class DefaultAssetPickerBuilderDelegate
                 selector: (_, DefaultAssetPickerProvider p) =>
                     p.currentPathEntity,
                 builder: (_, AssetPathEntity? currentPathEntity, __) {
-                  if (currentPathEntity != pathEntity) {
-                    return const SizedBox.shrink();
-                  } else {
+                  if (currentPathEntity == pathEntity) {
                     return AspectRatio(
-                      aspectRatio: 1.0,
-                      child: Icon(Icons.check, color: themeColor, size: 26.0),
+                      aspectRatio: 1,
+                      child: Icon(Icons.check, color: themeColor, size: 26),
                     );
                   }
+                  return const SizedBox.shrink();
                 },
               ),
             ],
@@ -1183,15 +1603,15 @@ class DefaultAssetPickerBuilderDelegate
               maxAssets: provider.maxAssets,
             );
             if (result != null) {
-              Navigator.of(context).pop(result);
+              Navigator.of(context).maybePop(result);
             }
           },
           child: Selector<DefaultAssetPickerProvider, String>(
             selector: (_, DefaultAssetPickerProvider p) =>
                 p.selectedDescriptions,
             builder: (_, __, ___) => Padding(
-              padding: const EdgeInsets.symmetric(vertical: 12.0),
-              child: Text(
+              padding: const EdgeInsets.symmetric(vertical: 12),
+              child: ScaleText(
                 isSelectedNotEmpty
                     ? '${Constants.textDelegate.preview}'
                         ' (${provider.selectedAssets.length})'
@@ -1200,8 +1620,9 @@ class DefaultAssetPickerBuilderDelegate
                   color: isSelectedNotEmpty
                       ? null
                       : theme.textTheme.caption?.color,
-                  fontSize: 18.0,
+                  fontSize: 17,
                 ),
+                maxScaleFactor: 1.2,
               ),
             ),
           ),
@@ -1211,7 +1632,25 @@ class DefaultAssetPickerBuilderDelegate
   }
 
   @override
+  Widget itemBannedIndicator(BuildContext context, AssetEntity asset) {
+    return Consumer<DefaultAssetPickerProvider>(
+      builder: (_, DefaultAssetPickerProvider p, __) {
+        if ((!p.selectedAssets.contains(asset) && p.selectedMaximumAssets) ||
+            (isWeChatMoment &&
+                asset.type == AssetType.video &&
+                p.selectedAssets.isNotEmpty)) {
+          return Container(
+            color: theme.colorScheme.background.withOpacity(.85),
+          );
+        }
+        return const SizedBox.shrink();
+      },
+    );
+  }
+
+  @override
   Widget selectIndicator(BuildContext context, AssetEntity asset) {
+    final Duration duration = switchingPathDuration * 0.75;
     return Selector<DefaultAssetPickerProvider, String>(
       selector: (_, DefaultAssetPickerProvider p) => p.selectedDescriptions,
       builder: (BuildContext context, _, __) {
@@ -1220,55 +1659,52 @@ class DefaultAssetPickerBuilderDelegate
           (DefaultAssetPickerProvider p) => p.selectedAssets,
         );
         final bool selected = selectedAssets.contains(asset);
-        final double indicatorSize = Screens.width / gridCount / 3;
+        final double indicatorSize =
+            context.mediaQuery.size.width / gridCount / 3;
         final Widget innerSelector = AnimatedContainer(
-          duration: switchingPathDuration,
+          duration: duration,
           width: indicatorSize / (isAppleOS ? 1.25 : 1.5),
           height: indicatorSize / (isAppleOS ? 1.25 : 1.5),
           decoration: BoxDecoration(
             border:
-                !selected ? Border.all(color: Colors.white, width: 2.0) : null,
+                !selected ? Border.all(color: Colors.white, width: 2) : null,
             color: selected ? themeColor : null,
             shape: BoxShape.circle,
           ),
           child: AnimatedSwitcher(
-            duration: switchingPathDuration,
-            reverseDuration: switchingPathDuration,
+            duration: duration,
+            reverseDuration: duration,
             child: selected
-                ? isSingleAssetMode
-                    ? const Icon(Icons.check, size: 18.0)
-                    : Text(
-                        '${selectedAssets.indexOf(asset) + 1}',
-                        style: TextStyle(
-                          color: selected
-                              ? theme.textTheme.bodyText1?.color
-                              : null,
-                          fontSize: isAppleOS ? 16.0 : 14.0,
-                          fontWeight:
-                              isAppleOS ? FontWeight.w600 : FontWeight.bold,
-                        ),
-                      )
+                ? const Icon(Icons.check, size: 18)
                 : const SizedBox.shrink(),
           ),
         );
         final GestureDetector selectorWidget = GestureDetector(
           behavior: HitTestBehavior.opaque,
-          onTap: () {
+          onTap: () async {
+            final bool? selectPredicateResult = await selectPredicate?.call(
+              context,
+              asset,
+              selected,
+            );
+            if (selectPredicateResult == false) {
+              return;
+            }
             if (selected) {
               provider.unSelectAsset(asset);
-            } else {
-              if (isSingleAssetMode) {
-                provider.selectedAssets.clear();
-              }
-              provider.selectAsset(asset);
-              if (isSingleAssetMode && !isPreviewEnabled) {
-                Navigator.of(context).pop(provider.selectedAssets);
-              }
+              return;
+            }
+            if (isSingleAssetMode) {
+              provider.selectedAssets.clear();
+            }
+            provider.selectAsset(asset);
+            if (isSingleAssetMode && !isPreviewEnabled) {
+              Navigator.of(context).maybePop(provider.selectedAssets);
             }
           },
           child: Container(
             margin: EdgeInsets.all(
-              Screens.width / gridCount / (isAppleOS ? 12.0 : 15.0),
+              context.mediaQuery.size.width / gridCount / 12,
             ),
             width: isPreviewEnabled ? indicatorSize : null,
             height: isPreviewEnabled ? indicatorSize : null,
@@ -1280,8 +1716,8 @@ class DefaultAssetPickerBuilderDelegate
         );
         if (isPreviewEnabled) {
           return PositionedDirectional(
-            top: 0.0,
-            end: 0.0,
+            top: 0,
+            end: 0,
             child: selectorWidget,
           );
         }
@@ -1292,15 +1728,23 @@ class DefaultAssetPickerBuilderDelegate
 
   @override
   Widget selectedBackdrop(BuildContext context, int index, AssetEntity asset) {
+    bool selectedAllAndNotSelected() =>
+        !provider.selectedAssets.contains(asset) &&
+        provider.selectedMaximumAssets;
+    bool selectedPhotosAndIsVideo() =>
+        isWeChatMoment &&
+        asset.type == AssetType.video &&
+        provider.selectedAssets.isNotEmpty;
+
     return Positioned.fill(
       child: GestureDetector(
         onTap: () async {
+          // When we reached the maximum select count and the asset
+          // is not selected, do nothing.
           // When the special type is WeChat Moment, pictures and videos cannot
           // be selected at the same time. Video select should be banned if any
           // pictures are selected.
-          if (isWeChatMoment &&
-              asset.type == AssetType.video &&
-              provider.selectedAssets.isNotEmpty) {
+          if (selectedAllAndNotSelected() || selectedPhotosAndIsVideo()) {
             return;
           }
           final List<AssetEntity> _current;
@@ -1334,20 +1778,37 @@ class DefaultAssetPickerBuilderDelegate
             selectorProvider: provider as DefaultAssetPickerProvider,
             specialPickerType: specialPickerType,
             maxAssets: provider.maxAssets,
+            shouldReversePreview: isAppleOS,
           );
           if (result != null) {
-            Navigator.of(context).pop(result);
+            Navigator.of(context).maybePop(result);
           }
         },
-        child: Selector<DefaultAssetPickerProvider, List<AssetEntity>>(
-          selector: (_, DefaultAssetPickerProvider p) => p.selectedAssets,
-          builder: (_, List<AssetEntity> selectedAssets, __) {
-            final bool selected = selectedAssets.contains(asset);
+        child: Consumer<DefaultAssetPickerProvider>(
+          builder: (_, DefaultAssetPickerProvider p, __) {
+            final int index = p.selectedAssets.indexOf(asset);
+            final bool selected = index != -1;
             return AnimatedContainer(
               duration: switchingPathDuration,
               color: selected
-                  ? theme.colorScheme.primary.withOpacity(0.45)
-                  : Colors.black.withOpacity(0.1),
+                  ? theme.colorScheme.primary.withOpacity(.45)
+                  : Colors.black.withOpacity(.1),
+              child: selected && !isSingleAssetMode
+                  ? Container(
+                      alignment: AlignmentDirectional.topStart,
+                      padding: const EdgeInsets.all(14),
+                      child: ScaleText(
+                        '${index + 1}',
+                        style: TextStyle(
+                          color: theme.textTheme.bodyText1?.color
+                              ?.withOpacity(.75),
+                          fontWeight: FontWeight.w600,
+                          height: 1,
+                        ),
+                        maxScaleFactor: 1.4,
+                      ),
+                    )
+                  : const SizedBox.shrink(),
             );
           },
         ),
@@ -1369,8 +1830,8 @@ class DefaultAssetPickerBuilderDelegate
       bottom: 0,
       child: Container(
         width: double.maxFinite,
-        height: 26.0,
-        padding: const EdgeInsets.symmetric(horizontal: 2.0, vertical: 2.0),
+        height: 26,
+        padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 2),
         decoration: BoxDecoration(
           gradient: LinearGradient(
             begin: AlignmentDirectional.bottomCenter,
@@ -1381,20 +1842,21 @@ class DefaultAssetPickerBuilderDelegate
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.center,
           children: <Widget>[
-            const Icon(Icons.videocam, size: 24.0, color: Colors.white),
+            const Icon(Icons.videocam, size: 22, color: Colors.white),
             Expanded(
               child: Padding(
-                padding: const EdgeInsetsDirectional.only(start: 4.0),
-                child: Text(
+                padding: const EdgeInsetsDirectional.only(start: 4),
+                child: ScaleText(
                   Constants.textDelegate.durationIndicatorBuilder(
                     Duration(seconds: asset.duration),
                   ),
-                  style: const TextStyle(color: Colors.white, fontSize: 16.0),
+                  style: const TextStyle(color: Colors.white, fontSize: 15),
                   strutStyle: const StrutStyle(
                     forceStrutHeight: true,
                     height: 1.4,
                   ),
                   maxLines: 1,
+                  maxScaleFactor: 1.2,
                 ),
               ),
             ),

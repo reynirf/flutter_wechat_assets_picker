@@ -49,21 +49,13 @@ class _DirectoryFileAssetPickerState extends State<DirectoryFileAssetPicker>
     final FileAssetPickerProvider provider = FileAssetPickerProvider(
       selectedAssets: fileList,
     );
-    final Widget picker = ChangeNotifierProvider<FileAssetPickerProvider>.value(
-      value: provider,
-      child: AssetPicker<File, Directory>(
-        builder: FileAssetPickerBuilder(provider: provider),
-      ),
+    final FileAssetPickerBuilder builder = FileAssetPickerBuilder(
+      provider: provider,
     );
-    final List<File>? result = await Navigator.of(
+    final List<File>? result = await AssetPicker.pickAssetsWithDelegate(
       context,
-      rootNavigator: true,
-    ).push<List<File>>(
-      AssetPickerPageRoute<List<File>>(
-        builder: picker,
-        transitionCurve: Curves.easeIn,
-        transitionDuration: const Duration(milliseconds: 300),
-      ),
+      delegate: builder,
+      provider: provider,
     );
     if (result != null) {
       fileList
@@ -369,12 +361,15 @@ class FileAssetPickerProvider extends AssetPickerProvider<File, Directory> {
   }
 
   @override
-  void switchPath(Directory pathEntity) {
+  Future<void> switchPath([Directory? pathEntity]) async {
+    if (pathEntity == null) {
+      return;
+    }
     isSwitchingPath = false;
     currentPathEntity = pathEntity;
     totalAssetsCount = 0;
     notifyListeners();
-    getAssetsFromEntity(0, currentPathEntity!);
+    await getAssetsFromEntity(0, currentPathEntity!);
   }
 }
 
@@ -382,10 +377,9 @@ class FileAssetPickerBuilder
     extends AssetPickerBuilderDelegate<File, Directory> {
   FileAssetPickerBuilder({
     required FileAssetPickerProvider provider,
-  }) : super(provider: provider);
+  }) : super(provider: provider, initialPermission: PermissionState.authorized);
 
-  AssetsPickerTextDelegate get textDelegate =>
-      DefaultAssetsPickerTextDelegate();
+  AssetsPickerTextDelegate get textDelegate => AssetsPickerTextDelegate();
 
   Duration get switchingPathDuration => kThemeAnimationDuration * 1.5;
 
@@ -475,7 +469,7 @@ class FileAssetPickerBuilder
   @override
   PreferredSizeWidget appBar(BuildContext context) {
     return AppBar(
-      backgroundColor: theme.appBarTheme.color,
+      backgroundColor: theme.appBarTheme.backgroundColor,
       centerTitle: isAppleOS,
       title: pathEntitySelector(context),
       leading: backButton(context),
@@ -534,6 +528,120 @@ class FileAssetPickerBuilder
   }
 
   @override
+  Widget assetsGridBuilder(BuildContext context) {
+    int totalCount = provider.currentAssets.length;
+    if (specialItemPosition != SpecialItemPosition.none) {
+      totalCount += 1;
+    }
+    final int placeholderCount;
+    if (isAppleOS && totalCount % gridCount != 0) {
+      placeholderCount = gridCount - totalCount % gridCount;
+    } else {
+      placeholderCount = 0;
+    }
+    final int row = (totalCount + placeholderCount) ~/ gridCount;
+    final double dividedSpacing = itemSpacing / gridCount;
+    final double topPadding =
+        MediaQuery.of(context).padding.top + kToolbarHeight;
+
+    Widget _sliverGrid(BuildContext ctx, List<File> assets) {
+      return SliverGrid(
+        delegate: SliverChildBuilderDelegate(
+          (_, int index) => Builder(
+            builder: (BuildContext c) {
+              if (isAppleOS) {
+                if (index < placeholderCount) {
+                  return const SizedBox.shrink();
+                }
+                index -= placeholderCount;
+              }
+              return Directionality(
+                textDirection: Directionality.of(context),
+                child: assetGridItemBuilder(c, index, assets),
+              );
+            },
+          ),
+          childCount: assetsGridItemCount(
+            context: ctx,
+            assets: assets,
+            placeholderCount: placeholderCount,
+          ),
+          findChildIndexCallback: (Key? key) {
+            if (key is ValueKey<String>) {
+              return findChildIndexBuilder(
+                id: key.value,
+                assets: assets,
+                placeholderCount: placeholderCount,
+              );
+            }
+            return null;
+          },
+        ),
+        gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+          crossAxisCount: gridCount,
+          mainAxisSpacing: itemSpacing,
+          crossAxisSpacing: itemSpacing,
+        ),
+      );
+    }
+
+    return LayoutBuilder(
+      builder: (BuildContext c, BoxConstraints constraints) {
+        final double _itemSize = constraints.maxWidth / gridCount;
+        // Use [ScrollView.anchor] to determine where is the first place of
+        // the [SliverGrid]. Each row needs [dividedSpacing] to calculate,
+        // then minus one times of [itemSpacing] because spacing's count in the
+        // cross axis is always less than the rows.
+        final double anchor = math.min(
+          (row * (_itemSize + dividedSpacing) + topPadding - itemSpacing) /
+              constraints.maxHeight,
+          1,
+        );
+
+        return Directionality(
+          textDirection: effectiveGridDirection(context),
+          child: ColoredBox(
+            color: theme.canvasColor,
+            child: Selector<FileAssetPickerProvider, List<File>>(
+              selector: (_, FileAssetPickerProvider provider) =>
+                  provider.currentAssets,
+              builder: (_, List<File> assets, __) => CustomScrollView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                controller: gridScrollController,
+                anchor: isAppleOS ? anchor : 0,
+                center: isAppleOS ? gridRevertKey : null,
+                slivers: <Widget>[
+                  if (isAppleOS)
+                    SliverToBoxAdapter(
+                      child: SizedBox(
+                        height:
+                            MediaQuery.of(context).padding.top + kToolbarHeight,
+                      ),
+                    ),
+                  _sliverGrid(_, assets),
+                  // Ignore the gap when the [anchor] is not equal to 1.
+                  if (isAppleOS && anchor == 1)
+                    SliverToBoxAdapter(
+                      child: SizedBox(
+                        height: MediaQuery.of(context).padding.bottom +
+                            bottomSectionHeight,
+                      ),
+                    ),
+                  if (isAppleOS)
+                    SliverToBoxAdapter(
+                      key: gridRevertKey,
+                      child: const SizedBox.shrink(),
+                    ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  @override
   Widget assetGridItemBuilder(
     BuildContext context,
     int index,
@@ -567,18 +675,22 @@ class FileAssetPickerBuilder
   }
 
   @override
-  int assetsGridItemCount(BuildContext context, List<File> currentAssets) {
+  int assetsGridItemCount({
+    required BuildContext context,
+    required List<File> assets,
+    int placeholderCount = 0,
+  }) {
     int length;
     switch (specialItemPosition) {
       case SpecialItemPosition.none:
-        length = currentAssets.length;
+        length = assets.length;
         break;
       case SpecialItemPosition.prepend:
       case SpecialItemPosition.append:
-        length = currentAssets.length + 1;
+        length = assets.length + 1;
         break;
     }
-    return length;
+    return length + placeholderCount;
   }
 
   @override
@@ -670,7 +782,7 @@ class FileAssetPickerBuilder
         selector: (_, FileAssetPickerProvider p) => p.isAssetsEmpty,
         builder: (_, bool isAssetsEmpty, __) {
           if (isAssetsEmpty) {
-            return const Text('Nothing here.');
+            return Text(textDelegate.emptyList);
           } else {
             return Center(
               child: SizedBox.fromSize(
@@ -1047,8 +1159,12 @@ class FileAssetPickerBuilder
   }
 
   @override
-  int findChildIndexBuilder(String id, List<File> currentAssets) {
-    return currentAssets.indexWhere((File file) => file.path == id);
+  int findChildIndexBuilder({
+    required String id,
+    required List<File> assets,
+    int placeholderCount = 0,
+  }) {
+    return assets.indexWhere((File file) => file.path == id);
   }
 }
 
@@ -1082,54 +1198,17 @@ class FileAssetPickerViewerBuilderDelegate
           maxAssets: selectorProvider?.maxAssets,
         );
 
-  bool isDisplayingDetail = true;
+  bool _isDisplayingDetail = true;
 
-  late final AnimationController _doubleTapAnimationController;
-  late final Animation<double> _doubleTapCurveAnimation;
-  Animation<double>? _doubleTapAnimation;
-  late VoidCallback _doubleTapListener;
+  AssetsPickerTextDelegate get textDelegate => AssetsPickerTextDelegate();
 
-  late final PageController pageController;
-
-  AssetsPickerTextDelegate get textDelegate =>
-      DefaultAssetsPickerTextDelegate();
-
+  @override
   void switchDisplayingDetail({bool? value}) {
-    isDisplayingDetail = value ?? !isDisplayingDetail;
+    _isDisplayingDetail = value ?? !_isDisplayingDetail;
     if (viewerState.mounted) {
       // ignore: invalid_use_of_protected_member
       viewerState.setState(() {});
     }
-  }
-
-  void updateAnimation(ExtendedImageGestureState state) {
-    final double begin = state.gestureDetails!.totalScale!;
-    final double end = state.gestureDetails!.totalScale! == 1.0 ? 3.0 : 1.0;
-    final Offset pointerDownPosition = state.pointerDownPosition!;
-
-    _doubleTapAnimation?.removeListener(_doubleTapListener);
-    _doubleTapAnimationController
-      ..stop()
-      ..reset();
-    _doubleTapListener = () {
-      state.handleDoubleTap(
-        scale: _doubleTapAnimation!.value,
-        doubleTapPosition: pointerDownPosition,
-      );
-    };
-    _doubleTapAnimation = Tween<double>(
-      begin: begin,
-      end: end,
-    ).animate(_doubleTapCurveAnimation)
-      ..addListener(_doubleTapListener);
-    _doubleTapAnimationController.forward();
-  }
-
-  Future<bool> syncSelectedAssetsWhenPop() async {
-    if (provider?.currentlySelectedAssets != null) {
-      selectorProvider?.selectedAssets = provider!.currentlySelectedAssets;
-    }
-    return true;
   }
 
   @override
@@ -1166,7 +1245,7 @@ class FileAssetPickerViewerBuilderDelegate
     return AnimatedPositioned(
       duration: kThemeAnimationDuration,
       curve: Curves.easeInOut,
-      bottom: isDisplayingDetail
+      bottom: _isDisplayingDetail
           ? 0.0
           : -(Screens.bottomSafeHeight + bottomDetailHeight),
       left: 0.0,
@@ -1280,7 +1359,8 @@ class FileAssetPickerViewerBuilderDelegate
     return AnimatedPositioned(
       duration: kThemeAnimationDuration,
       curve: Curves.easeInOut,
-      top: isDisplayingDetail ? 0.0 : -(Screens.topSafeHeight + kToolbarHeight),
+      top:
+          _isDisplayingDetail ? 0.0 : -(Screens.topSafeHeight + kToolbarHeight),
       left: 0.0,
       right: 0.0,
       height: Screens.topSafeHeight + kToolbarHeight,
@@ -1406,29 +1486,6 @@ class FileAssetPickerViewerBuilderDelegate
   }
 
   @override
-  void initStateAndTicker(
-    AssetPickerViewerState<File, Directory> s,
-    TickerProvider v,
-  ) {
-    super.initStateAndTicker(s, v);
-    _doubleTapAnimationController = AnimationController(
-      duration: const Duration(milliseconds: 200),
-      vsync: v,
-    );
-    _doubleTapCurveAnimation = CurvedAnimation(
-      parent: _doubleTapAnimationController,
-      curve: Curves.easeInOut,
-    );
-    pageController = PageController(initialPage: currentIndex);
-  }
-
-  @override
-  void dispose() {
-    _doubleTapAnimationController.dispose();
-    pageStreamController.close();
-  }
-
-  @override
   Widget selectButton(BuildContext context) {
     return Row(
       children: <Widget>[
@@ -1487,7 +1544,7 @@ class FileAssetPickerViewerBuilderDelegate
             border: !isSelected
                 ? Border.all(color: themeData.iconTheme.color!)
                 : null,
-            color: isSelected ? themeData.buttonColor : null,
+            color: isSelected ? themeData.colorScheme.secondary : null,
             shape: BoxShape.circle,
           ),
           child: Center(
