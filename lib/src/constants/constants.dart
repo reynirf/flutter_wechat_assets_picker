@@ -7,7 +7,8 @@ import 'dart:developer';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 
-import 'constants.dart';
+import '../delegates/assets_picker_text_delegate.dart';
+import '../delegates/sort_path_delegate.dart';
 
 export 'package:photo_manager/photo_manager.dart';
 export 'package:provider/provider.dart';
@@ -28,22 +29,27 @@ export '../widget/builder/fade_image_builder.dart';
 export '../widget/builder/image_page_builder.dart';
 export '../widget/builder/video_page_builder.dart';
 export '../widget/fixed_appbar.dart';
+export '../widget/gaps.dart';
 export '../widget/platform_progress_indicator.dart';
 
 export 'colors.dart';
 export 'custom_scroll_physics.dart';
 export 'enums.dart';
 export 'extensions.dart';
-export 'screens.dart';
 
 class Constants {
   const Constants._();
 
   static GlobalKey pickerKey = GlobalKey();
 
-  static AssetsPickerTextDelegate textDelegate =
-      DefaultAssetsPickerTextDelegate();
-  static SortPathDelegate sortPathDelegate = SortPathDelegate.common;
+  static AssetsPickerTextDelegate textDelegate = AssetsPickerTextDelegate();
+  static SortPathDelegate<dynamic> sortPathDelegate = SortPathDelegate.common;
+
+  /// The last scroll position where the picker scrolled.
+  ///
+  /// See also:
+  ///  * [AssetPickerBuilderDelegate.keepScrollOffset]
+  static ScrollPosition? scrollPosition;
 
   static const int defaultGridThumbSize = 200;
 }

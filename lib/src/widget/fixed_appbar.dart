@@ -74,7 +74,7 @@ class FixedAppBar extends StatelessWidget implements PreferredSizeWidget {
   double get _effectiveHeight => height ?? kToolbarHeight;
 
   @override
-  Size get preferredSize => Size(Screens.width, _effectiveHeight);
+  Size get preferredSize => Size.fromHeight(_effectiveHeight);
 
   @override
   Widget build(BuildContext context) {
@@ -87,7 +87,7 @@ class FixedAppBar extends StatelessWidget implements PreferredSizeWidget {
     }
 
     Widget child = Container(
-      width: Screens.width,
+      width: double.maxFinite,
       height: (height ?? kToolbarHeight) + MediaQuery.of(context).padding.top,
       padding: EdgeInsetsDirectional.only(
         top: MediaQuery.of(context).padding.top,
@@ -157,7 +157,7 @@ class FixedAppBar extends StatelessWidget implements PreferredSizeWidget {
             ? MaterialType.transparency
             : MaterialType.canvas,
         color: (backgroundColor ??
-                context.themeData.appBarTheme.color ??
+                context.themeData.appBarTheme.backgroundColor ??
                 context.themeData.primaryColor)
             .withOpacity(blurRadius > 0.0 ? 0.90 : 1.0),
         elevation: elevation ?? context.themeData.appBarTheme.elevation ?? 4.0,
