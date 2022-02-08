@@ -7,7 +7,6 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:photo_manager/photo_manager.dart';
 
-import '../../constants/constants.dart';
 import '../../constants/extensions.dart';
 import '../scale_text.dart';
 
@@ -68,7 +67,7 @@ class _LocallyAvailableBuilderState extends State<LocallyAvailableBuilder> {
   Widget _indicator(BuildContext context) {
     return StreamBuilder<PMProgressState>(
       stream: _progressHandler!.stream,
-      initialData: PMProgressState(0, PMRequestState.prepare),
+      initialData: const PMProgressState(0, PMRequestState.prepare),
       builder: (BuildContext c, AsyncSnapshot<PMProgressState> s) {
         if (s.hasData) {
           final double progress = s.data!.progress;

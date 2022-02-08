@@ -5,8 +5,11 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:photo_manager/photo_manager.dart';
+import 'package:video_player/video_player.dart';
 
-import '../../../src/constants/constants.dart';
+import '../../constants/constants.dart';
+import '../../constants/extensions.dart';
 import '../scale_text.dart';
 
 class AudioPageBuilder extends StatefulWidget {
@@ -96,6 +99,14 @@ class _AudioPageBuilderState extends State<AudioPageBuilder> {
     durationStreamController.add(_controller.value.position);
   }
 
+  void playButtonCallback() {
+    if (isPlaying) {
+      _controller.pause();
+    } else {
+      _controller.play();
+    }
+  }
+
   /// Title widget.
   /// 标题组件
   Widget get titleWidget {
@@ -109,13 +120,7 @@ class _AudioPageBuilderState extends State<AudioPageBuilder> {
   /// 控制音频播放或暂停的按钮
   Widget get audioControlButton {
     return GestureDetector(
-      onTap: () {
-        if (isPlaying) {
-          _controller.pause();
-        } else {
-          _controller.play();
-        }
-      },
+      onTap: playButtonCallback,
       child: Container(
         margin: const EdgeInsets.all(20),
         decoration: const BoxDecoration(
@@ -152,18 +157,22 @@ class _AudioPageBuilderState extends State<AudioPageBuilder> {
 
   @override
   Widget build(BuildContext context) {
-    return ColoredBox(
-      color: context.themeData.backgroundColor,
-      child: isLoaded
-          ? Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: <Widget>[
-                titleWidget,
-                audioControlButton,
-                durationIndicator,
-              ],
-            )
-          : const SizedBox.shrink(),
+    return Semantics(
+      onLongPress: playButtonCallback,
+      onLongPressHint: Constants.textDelegate.sActionPlayHint,
+      child: ColoredBox(
+        color: context.themeData.backgroundColor,
+        child: isLoaded
+            ? Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: <Widget>[
+                  titleWidget,
+                  audioControlButton,
+                  durationIndicator,
+                ],
+              )
+            : const SizedBox.shrink(),
+      ),
     );
   }
 }

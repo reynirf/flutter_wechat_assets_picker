@@ -89,11 +89,12 @@ please run the example or refer to [photo_manager](https://github.com/CaiJingLon
 
 ### Versions compatibility
 
-|        | 2.0.0 | 2.2.0 | 2.5.0 |
-|--------|:-----:|:-----:|:-----:|
-| 6.2.1+ |   ❌   |   ❌   |   ✅   |
-| 6.2.0  |   ✅   |   ✅   |   ✅   |
-| 5.0.0+ |   ✅   |  N/A  |  N/A  |
+|        | 2.0.0 | 2.2.0 | 2.5.0 | 2.8.0 |
+|--------|:-----:|:-----:|:-----:|:-----:|
+| 6.3.0+ |   ❌   |   ❌   |   ❌   |   ✅   |
+| 6.2.1+ |   ❌   |   ❌   |   ✅   |   ❌   |
+| 6.2.0  |   ✅   |   ✅   |   ✅   |   ❌   |
+| 5.0.0+ |   ✅   |  N/A  |  N/A  |  N/A  |
 
 If you got a `resolve conflict` error when running `flutter pub get`,
 please use `dependency_overrides` to fix it. See [here](#version-resolve-conflict-with-xxx-eg-dartx) .
@@ -402,6 +403,7 @@ Many thanks to these wonderful people ([emoji key](https://allcontributors.org/d
   </tr>
   <tr>
     <td align="center"><a href="https://github.com/maxzod"><img src="https://avatars.githubusercontent.com/u/47630729?v=4?s=50" width="50px;" alt=""/><br /><sub><b>Ahmed Masoud </b></sub></a><br /><a href="#translation-maxzod" title="Translation">🌍</a></td>
+    <td align="center"><a href="https://github.com/luomo-pro"><img src="https://avatars.githubusercontent.com/u/41097395?v=4?s=50" width="50px;" alt=""/><br /><sub><b>luomo-pro</b></sub></a><br /><a href="#a11y-luomo-pro" title="Accessibility">️️️️♿️</a> <a href="https://github.com/fluttercandies/flutter_wechat_assets_picker/issues?q=author%3Aluomo-pro" title="Bug reports">🐛</a></td>
   </tr>
 </table>
 

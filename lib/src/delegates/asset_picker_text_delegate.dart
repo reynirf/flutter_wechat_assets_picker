@@ -2,10 +2,41 @@
 /// [Author] Alex (https://github.com/Alex525)
 /// [Date] 2020/4/7 10:25
 ///
+import 'package:flutter/rendering.dart';
+import 'package:photo_manager/photo_manager.dart' show AssetType;
+
+/// All text delegates.
+final List<AssetPickerTextDelegate> assetPickerTextDelegates =
+    <AssetPickerTextDelegate>[
+  AssetPickerTextDelegate(),
+  EnglishAssetPickerTextDelegate(),
+  HebrewAssetPickerTextDelegate(),
+  GermanAssetPickerTextDelegate(),
+  RussianAssetPickerTextDelegate(),
+  JapaneseAssetPickerTextDelegate(),
+  ArabicAssetPickerTextDelegate(),
+  FrenchAssetPickerTextDelegate(),
+];
+
+/// Obtain the text delegate from the given locale.
+AssetPickerTextDelegate assetPickerTextDelegateFromLocale(Locale? locale) {
+  if (locale == null) {
+    return AssetPickerTextDelegate();
+  }
+  final String languageCode = locale.languageCode.toLowerCase();
+  for (final AssetPickerTextDelegate delegate in assetPickerTextDelegates) {
+    if (delegate.languageCode == languageCode) {
+      return delegate;
+    }
+  }
+  return AssetPickerTextDelegate();
+}
 
 /// Text delegate that controls text in widgets.
 /// 控制部件中的文字实现
-class AssetsPickerTextDelegate {
+class AssetPickerTextDelegate {
+  String get languageCode => 'zh';
+
   /// Confirm string for the confirm button.
   /// 确认按钮的字段
   String get confirm => '确认';
@@ -21,10 +52,6 @@ class AssetsPickerTextDelegate {
   /// GIF indicator string.
   /// GIF指示的字段
   String get gifIndicator => 'GIF';
-
-  /// HEIC failed string.
-  /// HEIC 类型资源加载失败的字段
-  String get heicNotSupported => '尚未支持HEIC类型资源';
 
   /// Load failed string for item.
   /// 资源加载失败时的字段
@@ -56,7 +83,7 @@ class AssetsPickerTextDelegate {
 
   String get viewingLimitedAssetsTip => '应用只能访问部分资源和相册';
 
-  String get changeAccessibleLimitedAssets => '设置可访问的资源';
+  String get changeAccessibleLimitedAssets => '点击设置可访问的资源';
 
   String get accessAllTip => '你已设置应用只能访问设备部分资源，'
       '建议允许访问「所有资源」';
@@ -80,11 +107,54 @@ class AssetsPickerTextDelegate {
             .padLeft(2, '0');
     return '$minute$separator$second';
   }
+
+  /// Semantics fields.
+  ///
+  /// Fields below are only for semantics usage. For customizable these fields,
+  /// head over to [EnglishAssetPickerTextDelegate] for fields understanding.
+
+  String get sTypeAudioLabel => '音频';
+
+  String get sTypeImageLabel => '图片';
+
+  String get sTypeVideoLabel => '视频';
+
+  String get sTypeOtherLabel => '其他资源';
+
+  String semanticTypeLabel(AssetType type) {
+    switch (type) {
+      case AssetType.audio:
+        return sTypeAudioLabel;
+      case AssetType.image:
+        return sTypeImageLabel;
+      case AssetType.video:
+        return sTypeVideoLabel;
+      case AssetType.other:
+        return sTypeOtherLabel;
+    }
+  }
+
+  String get sActionPlayHint => '播放';
+
+  String get sActionPreviewHint => '预览';
+
+  String get sActionSelectHint => '选中';
+
+  String get sActionSwitchPathLabel => '切换路径';
+
+  String get sActionUseCameraHint => '使用相机';
+
+  String get sNameDurationLabel => '时长';
+
+  String get sUnitAssetCountLabel => '数量';
 }
 
-/// [AssetsPickerTextDelegate] implements with English.
+/// [AssetPickerTextDelegate] implements with English.
 /// English Localization
-class EnglishTextDelegate extends AssetsPickerTextDelegate {
+class EnglishAssetPickerTextDelegate extends AssetPickerTextDelegate {
+  @override
+  String get languageCode => 'en';
+
   @override
   String get confirm => 'Confirm';
 
@@ -96,9 +166,6 @@ class EnglishTextDelegate extends AssetsPickerTextDelegate {
 
   @override
   String get gifIndicator => 'GIF';
-
-  @override
-  String get heicNotSupported => 'Unsupported HEIC asset type.';
 
   @override
   String get loadFailed => 'Load failed';
@@ -127,7 +194,7 @@ class EnglishTextDelegate extends AssetsPickerTextDelegate {
 
   @override
   String get changeAccessibleLimitedAssets =>
-      'Update limited access assets list';
+      'Click to update accessible assets';
 
   @override
   String get accessAllTip => 'App can only access some assets on the device. '
@@ -141,11 +208,47 @@ class EnglishTextDelegate extends AssetsPickerTextDelegate {
 
   @override
   String get accessiblePathName => 'Accessible assets';
+
+  @override
+  String get sTypeAudioLabel => 'Audio';
+
+  @override
+  String get sTypeImageLabel => 'Image';
+
+  @override
+  String get sTypeVideoLabel => 'Video';
+
+  @override
+  String get sTypeOtherLabel => 'Other asset';
+
+  @override
+  String get sActionPlayHint => 'play';
+
+  @override
+  String get sActionPreviewHint => 'preview';
+
+  @override
+  String get sActionSelectHint => 'select';
+
+  @override
+  String get sActionSwitchPathLabel => 'switch path';
+
+  @override
+  String get sActionUseCameraHint => 'use camera';
+
+  @override
+  String get sNameDurationLabel => 'duration';
+
+  @override
+  String get sUnitAssetCountLabel => 'count';
 }
 
-/// [AssetsPickerTextDelegate] implements with Hebrew.
+/// [AssetPickerTextDelegate] implements with Hebrew.
 /// תרגום בשפה העברית
-class HebrewTextDelegate extends AssetsPickerTextDelegate {
+class HebrewAssetPickerTextDelegate extends AssetPickerTextDelegate {
+  @override
+  String get languageCode => 'he';
+
   @override
   String get confirm => 'אישור';
 
@@ -157,9 +260,6 @@ class HebrewTextDelegate extends AssetsPickerTextDelegate {
 
   @override
   String get gifIndicator => 'GIF';
-
-  @override
-  String get heicNotSupported => 'קובץ HEIC לא נתמך.';
 
   @override
   String get loadFailed => 'הטעינה נכשלה';
@@ -201,11 +301,48 @@ class HebrewTextDelegate extends AssetsPickerTextDelegate {
 
   @override
   String get accessiblePathName => 'קבצים נגישים';
+
+  // Using English for semantics usage, since Hebrew is not supported for TalkBack.
+  @override
+  String get sTypeAudioLabel => 'Audio';
+
+  @override
+  String get sTypeImageLabel => 'Image';
+
+  @override
+  String get sTypeVideoLabel => 'Video';
+
+  @override
+  String get sTypeOtherLabel => 'Other asset';
+
+  @override
+  String get sActionPlayHint => 'play';
+
+  @override
+  String get sActionPreviewHint => 'preview';
+
+  @override
+  String get sActionSelectHint => 'select';
+
+  @override
+  String get sActionSwitchPathLabel => 'switch path';
+
+  @override
+  String get sActionUseCameraHint => 'use camera';
+
+  @override
+  String get sNameDurationLabel => 'duration';
+
+  @override
+  String get sUnitAssetCountLabel => 'count';
 }
 
-/// [AssetsPickerTextDelegate] implementiert mit der deutschen Übersetzung.
+/// [AssetPickerTextDelegate] implementiert mit der deutschen Übersetzung.
 /// Deutsche Textimplementierung.
-class GermanTextDelegate extends AssetsPickerTextDelegate {
+class GermanAssetPickerTextDelegate extends AssetPickerTextDelegate {
+  @override
+  String get languageCode => 'de';
+
   @override
   String get confirm => 'Bestätigen';
 
@@ -217,9 +354,6 @@ class GermanTextDelegate extends AssetsPickerTextDelegate {
 
   @override
   String get gifIndicator => 'GIF';
-
-  @override
-  String get heicNotSupported => 'HEIC Format ist nicht unterstützt.';
 
   @override
   String get loadFailed => 'Ladevorgang ist fehlgeschlagen';
@@ -260,11 +394,47 @@ class GermanTextDelegate extends AssetsPickerTextDelegate {
 
   @override
   String get accessiblePathName => 'Verfügbare Assets';
+
+  @override
+  String get sTypeAudioLabel => 'Audio';
+
+  @override
+  String get sTypeImageLabel => 'Bild';
+
+  @override
+  String get sTypeVideoLabel => 'Video';
+
+  @override
+  String get sTypeOtherLabel => 'Andere Medien';
+
+  @override
+  String get sActionPlayHint => 'Abspielen';
+
+  @override
+  String get sActionPreviewHint => 'Vorschau';
+
+  @override
+  String get sActionSelectHint => 'Auswählen';
+
+  @override
+  String get sActionSwitchPathLabel => 'Dateipfad ändern';
+
+  @override
+  String get sActionUseCameraHint => 'Kamera benutzen';
+
+  @override
+  String get sNameDurationLabel => 'Dauer';
+
+  @override
+  String get sUnitAssetCountLabel => 'Anzahl';
 }
 
-/// [AssetsPickerTextDelegate] implements with Russian.
+/// [AssetPickerTextDelegate] implements with Russian.
 /// Локализация на русский язык.
-class RussianTextDelegate extends AssetsPickerTextDelegate {
+class RussianAssetPickerTextDelegate extends AssetPickerTextDelegate {
+  @override
+  String get languageCode => 'ru';
+
   @override
   String get confirm => 'Готово';
 
@@ -276,9 +446,6 @@ class RussianTextDelegate extends AssetsPickerTextDelegate {
 
   @override
   String get gifIndicator => 'GIF';
-
-  @override
-  String get heicNotSupported => 'Формат HEIC не поддерживается.';
 
   @override
   String get loadFailed => 'Ошибка при загрузке';
@@ -324,9 +491,12 @@ class RussianTextDelegate extends AssetsPickerTextDelegate {
   String get accessiblePathName => 'Доступные файлы';
 }
 
-/// [AssetsPickerTextDelegate] implements with Japanese.
+/// [AssetPickerTextDelegate] implements with Japanese.
 /// 日本語の TextDelegate
-class JapaneseTextDelegate extends AssetsPickerTextDelegate {
+class JapaneseAssetPickerTextDelegate extends AssetPickerTextDelegate {
+  @override
+  String get languageCode => 'ja';
+
   @override
   String get confirm => '決定';
 
@@ -338,9 +508,6 @@ class JapaneseTextDelegate extends AssetsPickerTextDelegate {
 
   @override
   String get gifIndicator => 'GIF';
-
-  @override
-  String get heicNotSupported => 'HEIC フォーマットはサポートしていません。';
 
   @override
   String get loadFailed => '読み込みに失敗しました。';
@@ -385,9 +552,12 @@ class JapaneseTextDelegate extends AssetsPickerTextDelegate {
   String get accessiblePathName => 'アクセスできるリソース';
 }
 
-/// [AssetsPickerTextDelegate] implements with Arabic.
+/// [AssetPickerTextDelegate] implements with Arabic.
 /// الترجمة العربية
-class ArabicTextDelegate extends AssetsPickerTextDelegate {
+class ArabicAssetPickerTextDelegate extends AssetPickerTextDelegate {
+  @override
+  String get languageCode => 'ar';
+
   @override
   String get confirm => 'تاكيد';
 
@@ -399,9 +569,6 @@ class ArabicTextDelegate extends AssetsPickerTextDelegate {
 
   @override
   String get gifIndicator => 'GIF';
-
-  @override
-  String get heicNotSupported => 'نوع HEIC غير مدعوم.';
 
   @override
   String get loadFailed => 'فشل التحميل';
@@ -445,11 +612,47 @@ class ArabicTextDelegate extends AssetsPickerTextDelegate {
 
   @override
   String get accessiblePathName => 'ملفات يمكن الوصول إليها';
+
+  @override
+  String get sTypeAudioLabel => 'صوتي';
+
+  @override
+  String get sTypeImageLabel => 'صورة';
+
+  @override
+  String get sTypeVideoLabel => 'فيديو';
+
+  @override
+  String get sTypeOtherLabel => 'آخر';
+
+  @override
+  String get sActionPlayHint => 'تشغيل';
+
+  @override
+  String get sActionPreviewHint => 'معاينة';
+
+  @override
+  String get sActionSelectHint => 'تحديد';
+
+  @override
+  String get sActionSwitchPathLabel => 'تبديل المسار';
+
+  @override
+  String get sActionUseCameraHint => 'استخدم الكاميرا';
+
+  @override
+  String get sNameDurationLabel => 'مدة';
+
+  @override
+  String get sUnitAssetCountLabel => 'عدد';
 }
 
-/// [AssetsPickerTextDelegate] implements with French.
+/// [AssetPickerTextDelegate] implements with French.
 /// Délégué texte français
-class FrenchTextDelegate extends AssetsPickerTextDelegate {
+class FrenchAssetPickerTextDelegate extends AssetPickerTextDelegate {
+  @override
+  String get languageCode => 'fr';
+
   @override
   String get confirm => 'OK';
 
@@ -461,9 +664,6 @@ class FrenchTextDelegate extends AssetsPickerTextDelegate {
 
   @override
   String get gifIndicator => 'GIF';
-
-  @override
-  String get heicNotSupported => 'Type de fichier non supporté';
 
   @override
   String get loadFailed => 'Echec du chargement';

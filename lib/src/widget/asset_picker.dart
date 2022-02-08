@@ -2,11 +2,20 @@
 /// [Author] Alex (https://github.com/Alex525)
 /// [Date] 2020/3/31 15:39
 ///
-
+// ignore_for_file: deprecated_member_use
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:photo_manager/photo_manager.dart';
+import 'package:provider/provider.dart';
 
 import '../constants/constants.dart';
+import '../constants/enums.dart';
+import '../constants/extensions.dart';
+import '../delegates/asset_picker_builder_delegate.dart';
+import '../delegates/asset_picker_text_delegate.dart';
+import '../delegates/sort_path_delegate.dart';
+import '../provider/asset_picker_provider.dart';
+import 'asset_picker_page_route.dart';
 
 class AssetPicker<Asset, Path> extends StatefulWidget {
   const AssetPicker({Key? key, required this.builder}) : super(key: key);
@@ -37,7 +46,7 @@ class AssetPicker<Asset, Path> extends StatefulWidget {
     Color? themeColor,
     ThemeData? pickerTheme,
     SortPathDelegate<AssetPathEntity>? sortPathDelegate,
-    AssetsPickerTextDelegate? textDelegate,
+    AssetPickerTextDelegate? textDelegate,
     FilterOptionGroup? filterOptions,
     WidgetBuilder? specialItemBuilder,
     IndicatorBuilder? loadingIndicatorBuilder,
@@ -100,8 +109,6 @@ class AssetPicker<Asset, Path> extends StatefulWidget {
           provider: provider,
           initialPermission: _ps,
           gridCount: gridCount,
-          textDelegate: textDelegate,
-          themeColor: themeColor,
           pickerTheme: pickerTheme,
           gridThumbSize: gridThumbSize,
           previewThumbSize: previewThumbSize,
@@ -112,6 +119,9 @@ class AssetPicker<Asset, Path> extends StatefulWidget {
           allowSpecialItemWhenEmpty: allowSpecialItemWhenEmpty,
           selectPredicate: selectPredicate,
           shouldRevertGrid: shouldRevertGrid,
+          textDelegate: textDelegate,
+          themeColor: themeColor,
+          locale: Localizations.maybeLocaleOf(context),
         ),
       ),
     );
@@ -141,7 +151,7 @@ class AssetPicker<Asset, Path> extends StatefulWidget {
   }) async {
     await permissionCheck();
 
-    final Widget picker = ChangeNotifierProvider<PickerProvider>.value(
+    final Widget picker = CNP<PickerProvider>.value(
       value: provider,
       child: AssetPicker<Asset, Path>(
         key: Constants.pickerKey,
@@ -191,10 +201,51 @@ class AssetPicker<Asset, Path> extends StatefulWidget {
 
   /// Build a dark theme according to the theme color.
   /// 通过主题色构建一个默认的暗黑主题
-  static ThemeData themeData(Color themeColor) {
+  static ThemeData themeData(Color themeColor, {bool light = false}) {
+    if (light) {
+      return ThemeData.light().copyWith(
+        primaryColor: Colors.grey[50],
+        primaryColorLight: Colors.grey[50],
+        primaryColorDark: Colors.grey[50],
+        canvasColor: Colors.grey[100],
+        scaffoldBackgroundColor: Colors.grey[50],
+        bottomAppBarColor: Colors.grey[50],
+        cardColor: Colors.grey[50],
+        highlightColor: Colors.transparent,
+        toggleableActiveColor: themeColor,
+        textSelectionTheme: TextSelectionThemeData(
+          cursorColor: themeColor,
+          selectionColor: themeColor.withAlpha(100),
+          selectionHandleColor: themeColor,
+        ),
+        indicatorColor: themeColor,
+        appBarTheme: const AppBarTheme(
+          systemOverlayStyle: SystemUiOverlayStyle(
+            statusBarBrightness: Brightness.light,
+            statusBarIconBrightness: Brightness.dark,
+          ),
+          elevation: 0,
+        ),
+        buttonTheme: ButtonThemeData(buttonColor: themeColor),
+        colorScheme: ColorScheme(
+          primary: Colors.grey[50]!,
+          primaryVariant: Colors.grey[50]!,
+          secondary: themeColor,
+          secondaryVariant: themeColor,
+          background: Colors.grey[50]!,
+          surface: Colors.grey[50]!,
+          brightness: Brightness.light,
+          error: const Color(0xffcf6679),
+          onPrimary: Colors.white,
+          onSecondary: Colors.white,
+          onSurface: Colors.black,
+          onBackground: Colors.black,
+          onError: Colors.white,
+        ),
+      );
+    }
     return ThemeData.dark().copyWith(
       primaryColor: Colors.grey[900],
-      primaryColorBrightness: Brightness.dark,
       primaryColorLight: Colors.grey[900],
       primaryColorDark: Colors.grey[900],
       canvasColor: Colors.grey[850],

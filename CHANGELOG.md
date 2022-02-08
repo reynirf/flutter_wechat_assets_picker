@@ -1,5 +1,24 @@
 # Changelog
 
+## 7.0.0-dev.2
+
+- Add full semantics support. (#232)
+- Implement the default light theme. (#234)
+
+## 7.0.0-dev.1
+
+- Migrate to the latest photo_manager.
+
+## 6.3.1
+
+- Improve image type determine when resolving image data.
+  This mostly resolved the occasionally HEIC loading issue
+  when apps are running under the release mode.
+
+## 6.3.0
+
+- Support for Flutter 2.8.0, also drop supports for Flutter below 2.8.0.
+
 ## 6.2.4
 
 - Improve audio item layout.

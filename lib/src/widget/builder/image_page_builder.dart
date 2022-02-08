@@ -4,8 +4,9 @@
 ///
 import 'package:extended_image/extended_image.dart';
 import 'package:flutter/material.dart';
+import 'package:photo_manager/photo_manager.dart';
 
-import '../../constants/constants.dart';
+import '../../delegates/asset_picker_viewer_builder_delegate.dart';
 import 'locally_available_builder.dart';
 
 class ImagePageBuilder extends StatefulWidget {
