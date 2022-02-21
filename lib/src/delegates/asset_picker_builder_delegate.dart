@@ -1472,7 +1472,7 @@ class DefaultAssetPickerBuilderDelegate
             borderRadius: BorderRadius.circular(3),
           ),
           child: ScaleText(
-            Constants.textDelegate.confirm,
+            textDelegate.confirm,
             style: TextStyle(
               color: p.isSelectedNotEmpty
                   ? theme.textTheme.bodyText1?.color
