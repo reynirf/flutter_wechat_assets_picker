@@ -6,14 +6,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:photo_manager/photo_manager.dart';
-import 'package:provider/provider.dart';
 
+import '../constants/config.dart';
 import '../constants/constants.dart';
-import '../constants/enums.dart';
-import '../constants/extensions.dart';
 import '../delegates/asset_picker_builder_delegate.dart';
-import '../delegates/asset_picker_text_delegate.dart';
-import '../delegates/sort_path_delegate.dart';
+import '../internal/methods.dart';
+import '../internal/singleton.dart';
 import '../provider/asset_picker_provider.dart';
 import 'asset_picker_page_route.dart';
 
@@ -34,139 +32,72 @@ class AssetPicker<Asset, Path> extends StatefulWidget {
   /// 跳转至选择器的静态方法
   static Future<List<AssetEntity>?> pickAssets(
     BuildContext context, {
-    List<AssetEntity>? selectedAssets,
-    int maxAssets = 9,
-    int pageSize = 80,
-    int gridThumbSize = Constants.defaultGridThumbSize,
-    int pathThumbSize = 80,
-    int gridCount = 4,
-    RequestType requestType = RequestType.image,
-    List<int>? previewThumbSize,
-    SpecialPickerType? specialPickerType,
-    Color? themeColor,
-    ThemeData? pickerTheme,
-    SortPathDelegate<AssetPathEntity>? sortPathDelegate,
-    AssetPickerTextDelegate? textDelegate,
-    FilterOptionGroup? filterOptions,
-    WidgetBuilder? specialItemBuilder,
-    IndicatorBuilder? loadingIndicatorBuilder,
-    SpecialItemPosition specialItemPosition = SpecialItemPosition.none,
-    bool allowSpecialItemWhenEmpty = false,
-    AssetSelectPredicate<AssetEntity>? selectPredicate,
-    bool? shouldRevertGrid,
+    AssetPickerConfig pickerConfig = const AssetPickerConfig(),
     bool useRootNavigator = true,
-    Curve routeCurve = Curves.easeIn,
-    Duration routeDuration = const Duration(milliseconds: 300),
+    AssetPickerPageRouteBuilder<List<AssetEntity>>? pageRouteBuilder,
   }) async {
-    if (maxAssets < 1) {
-      throw ArgumentError(
-        'maxAssets must be greater than 1.',
-      );
-    }
-    if (pageSize % gridCount != 0) {
-      throw ArgumentError(
-        'pageSize must be a multiple of gridCount.',
-      );
-    }
-    if (pickerTheme != null && themeColor != null) {
-      throw ArgumentError(
-        'Theme and theme color cannot be set at the same time.',
-      );
-    }
-    if (specialPickerType == SpecialPickerType.wechatMoment) {
-      if (requestType != RequestType.image) {
-        throw ArgumentError(
-          'SpecialPickerType.wechatMoment and requestType cannot be set at the same time.',
-        );
-      }
-      requestType = RequestType.common;
-    }
-    if ((specialItemBuilder == null &&
-            specialItemPosition != SpecialItemPosition.none) ||
-        (specialItemBuilder != null &&
-            specialItemPosition == SpecialItemPosition.none)) {
-      throw ArgumentError('Custom item did not set properly.');
-    }
-
     final PermissionState _ps = await permissionCheck();
-
     final DefaultAssetPickerProvider provider = DefaultAssetPickerProvider(
-      maxAssets: maxAssets,
-      pageSize: pageSize,
-      pathThumbSize: pathThumbSize,
-      selectedAssets: selectedAssets,
-      requestType: requestType,
-      sortPathDelegate: sortPathDelegate,
-      filterOptions: filterOptions,
-      routeDuration: routeDuration,
+      maxAssets: pickerConfig.maxAssets,
+      pageSize: pickerConfig.pageSize,
+      pathThumbnailSize: pickerConfig.pathThumbnailSize,
+      selectedAssets: pickerConfig.selectedAssets,
+      requestType: pickerConfig.requestType,
+      sortPathDelegate: pickerConfig.sortPathDelegate,
+      filterOptions: pickerConfig.filterOptions,
     );
-    final Widget picker =
-        ChangeNotifierProvider<DefaultAssetPickerProvider>.value(
-      value: provider,
-      child: AssetPicker<AssetEntity, AssetPathEntity>(
-        key: Constants.pickerKey,
-        builder: DefaultAssetPickerBuilderDelegate(
-          provider: provider,
-          initialPermission: _ps,
-          gridCount: gridCount,
-          pickerTheme: pickerTheme,
-          gridThumbSize: gridThumbSize,
-          previewThumbSize: previewThumbSize,
-          specialPickerType: specialPickerType,
-          specialItemPosition: specialItemPosition,
-          specialItemBuilder: specialItemBuilder,
-          loadingIndicatorBuilder: loadingIndicatorBuilder,
-          allowSpecialItemWhenEmpty: allowSpecialItemWhenEmpty,
-          selectPredicate: selectPredicate,
-          shouldRevertGrid: shouldRevertGrid,
-          textDelegate: textDelegate,
-          themeColor: themeColor,
-          locale: Localizations.maybeLocaleOf(context),
-        ),
+    final Widget picker = AssetPicker<AssetEntity, AssetPathEntity>(
+      key: Singleton.pickerKey,
+      builder: DefaultAssetPickerBuilderDelegate(
+        provider: provider,
+        initialPermission: _ps,
+        gridCount: pickerConfig.gridCount,
+        pickerTheme: pickerConfig.pickerTheme,
+        gridThumbnailSize: pickerConfig.gridThumbnailSize,
+        previewThumbnailSize: pickerConfig.previewThumbnailSize,
+        specialPickerType: pickerConfig.specialPickerType,
+        specialItemPosition: pickerConfig.specialItemPosition,
+        specialItemBuilder: pickerConfig.specialItemBuilder,
+        loadingIndicatorBuilder: pickerConfig.loadingIndicatorBuilder,
+        allowSpecialItemWhenEmpty: pickerConfig.allowSpecialItemWhenEmpty,
+        selectPredicate: pickerConfig.selectPredicate,
+        shouldRevertGrid: pickerConfig.shouldRevertGrid,
+        textDelegate: pickerConfig.textDelegate,
+        themeColor: pickerConfig.themeColor,
+        locale: Localizations.maybeLocaleOf(context),
       ),
     );
     final List<AssetEntity>? result = await Navigator.of(
       context,
       rootNavigator: useRootNavigator,
     ).push<List<AssetEntity>>(
-      AssetPickerPageRoute<List<AssetEntity>>(
-        builder: picker,
-        transitionCurve: routeCurve,
-        transitionDuration: routeDuration,
-      ),
+      pageRouteBuilder?.call(picker) ??
+          AssetPickerPageRoute<List<AssetEntity>>(builder: (_) => picker),
     );
     return result;
   }
 
-  /// Call the picker with provided [delegate] and [provider].
-  /// 通过指定的 [delegate] 和 [provider] 调用选择器
+  /// Call the picker with provided [delegate].
+  /// 通过指定的 [delegate] 调用选择器
   static Future<List<Asset>?> pickAssetsWithDelegate<Asset, Path,
       PickerProvider extends AssetPickerProvider<Asset, Path>>(
     BuildContext context, {
     required AssetPickerBuilderDelegate<Asset, Path> delegate,
-    required PickerProvider provider,
     bool useRootNavigator = true,
-    Curve routeCurve = Curves.easeIn,
-    Duration routeDuration = const Duration(milliseconds: 300),
+    AssetPickerPageRouteBuilder<List<Asset>>? pageRouteBuilder,
   }) async {
     await permissionCheck();
 
-    final Widget picker = CNP<PickerProvider>.value(
-      value: provider,
-      child: AssetPicker<Asset, Path>(
-        key: Constants.pickerKey,
-        builder: delegate,
-      ),
+    final Widget picker = AssetPicker<Asset, Path>(
+      key: Singleton.pickerKey,
+      builder: delegate,
     );
     final List<Asset>? result = await Navigator.of(
       context,
       rootNavigator: useRootNavigator,
     ).push<List<Asset>>(
-      AssetPickerPageRoute<List<Asset>>(
-        builder: picker,
-        transitionCurve: routeCurve,
-        transitionDuration: routeDuration,
-      ),
+      pageRouteBuilder?.call(picker) ??
+          AssetPickerPageRoute<List<Asset>>(builder: (_) => picker),
     );
     return result;
   }
@@ -201,7 +132,8 @@ class AssetPicker<Asset, Path> extends StatefulWidget {
 
   /// Build a dark theme according to the theme color.
   /// 通过主题色构建一个默认的暗黑主题
-  static ThemeData themeData(Color themeColor, {bool light = false}) {
+  static ThemeData themeData(Color? themeColor, {bool light = false}) {
+    themeColor ??= defaultThemeColorWeChat;
     if (light) {
       return ThemeData.light().copyWith(
         primaryColor: Colors.grey[50],
@@ -292,12 +224,13 @@ class AssetPicker<Asset, Path> extends StatefulWidget {
 }
 
 class AssetPickerState<Asset, Path> extends State<AssetPicker<Asset, Path>>
-    with WidgetsBindingObserver {
+    with TickerProviderStateMixin, WidgetsBindingObserver {
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance!.addObserver(this);
     AssetPicker.registerObserve(_onLimitedAssetsUpdated);
+    widget.builder.initState(this);
   }
 
   @override
@@ -314,28 +247,20 @@ class AssetPickerState<Asset, Path> extends State<AssetPicker<Asset, Path>>
   void dispose() {
     WidgetsBinding.instance!.removeObserver(this);
     AssetPicker.unregisterObserve(_onLimitedAssetsUpdated);
-    // Skip delegate's dispose when it's keeping scroll offset.
-    if (!widget.builder.keepScrollOffset) {
-      widget.builder.dispose();
-    }
+    widget.builder.dispose();
     super.dispose();
   }
 
   Future<void> _onLimitedAssetsUpdated(MethodCall call) async {
-    if (!widget.builder.isPermissionLimited) {
-      return;
-    }
-    if (widget.builder.provider.currentPathEntity != null) {
-      final Path? _currentPathEntity =
-          widget.builder.provider.currentPathEntity;
-      if (_currentPathEntity is AssetPathEntity) {
-        await _currentPathEntity.refreshPathProperties();
-      }
-      await widget.builder.provider.switchPath(_currentPathEntity);
-      if (mounted) {
-        setState(() {});
-      }
-    }
+    await widget.builder.onAssetsChanged(
+      call,
+      (VoidCallback fn) {
+        fn();
+        if (mounted) {
+          setState(() {});
+        }
+      },
+    );
   }
 
   @override
