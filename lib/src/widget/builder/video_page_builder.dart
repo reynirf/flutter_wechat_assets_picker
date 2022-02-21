@@ -8,8 +8,9 @@ import 'package:flutter/material.dart';
 import 'package:photo_manager/photo_manager.dart';
 import 'package:video_player/video_player.dart';
 
-import '../../constants/constants.dart';
 import '../../delegates/asset_picker_viewer_builder_delegate.dart';
+import '../../internal/methods.dart';
+import '../../internal/singleton.dart';
 import '../scale_text.dart';
 import 'locally_available_builder.dart';
 
@@ -195,7 +196,13 @@ class _VideoPageBuilderState extends State<VideoPageBuilder> {
       asset: widget.asset,
       builder: (BuildContext context, AssetEntity asset) {
         if (hasErrorWhenInitializing) {
-          return Center(child: ScaleText(Constants.textDelegate.loadFailed));
+          return Center(
+            child: ScaleText(
+              Singleton.textDelegate.loadFailed,
+              semanticsLabel:
+                  Singleton.textDelegate.semanticsTextDelegate.loadFailed,
+            ),
+          );
         }
         if (!_isLocallyAvailable && !_isInitializing) {
           initializeVideoPlayerController();
@@ -205,7 +212,8 @@ class _VideoPageBuilderState extends State<VideoPageBuilder> {
         }
         return Semantics(
           onLongPress: playButtonCallback,
-          onLongPressHint: Constants.textDelegate.sActionPlayHint,
+          onLongPressHint:
+              Singleton.textDelegate.semanticsTextDelegate.sActionPlayHint,
           child: GestureDetector(
             onLongPress: MediaQuery.of(context).accessibleNavigation
                 ? playButtonCallback

@@ -2,6 +2,8 @@
 /// [Author] Alex (https://github.com/Alex525)
 /// [Date] 2020/4/7 10:25
 ///
+import 'dart:io' show Platform;
+
 import 'package:flutter/rendering.dart';
 import 'package:photo_manager/photo_manager.dart' show AssetType;
 
@@ -112,7 +114,6 @@ class AssetPickerTextDelegate {
   ///
   /// Fields below are only for semantics usage. For customizable these fields,
   /// head over to [EnglishAssetPickerTextDelegate] for fields understanding.
-
   String get sTypeAudioLabel => '音频';
 
   String get sTypeImageLabel => '图片';
@@ -147,6 +148,17 @@ class AssetPickerTextDelegate {
   String get sNameDurationLabel => '时长';
 
   String get sUnitAssetCountLabel => '数量';
+
+  /// Fallback delegate for semantics determined by platform.
+  ///
+  /// The purpose of this field is to provide a fallback delegate references
+  /// when a language does not supported by Talkback or VoiceOver. Set this to
+  /// another text delegate makes screen readers read accordingly.
+  ///
+  /// See also:
+  ///  * Talkback: https://support.google.com/accessibility/android/answer/11101402)
+  ///  * VoiceOver: https://support.apple.com/en-us/HT206175
+  AssetPickerTextDelegate get semanticsTextDelegate => this;
 }
 
 /// [AssetPickerTextDelegate] implements with English.
@@ -302,39 +314,46 @@ class HebrewAssetPickerTextDelegate extends AssetPickerTextDelegate {
   @override
   String get accessiblePathName => 'קבצים נגישים';
 
-  // Using English for semantics usage, since Hebrew is not supported for TalkBack.
   @override
-  String get sTypeAudioLabel => 'Audio';
+  String get sTypeAudioLabel => 'שמע';
 
   @override
-  String get sTypeImageLabel => 'Image';
+  String get sTypeImageLabel => 'תמונה';
 
   @override
-  String get sTypeVideoLabel => 'Video';
+  String get sTypeVideoLabel => 'סרטון';
 
   @override
-  String get sTypeOtherLabel => 'Other asset';
+  String get sTypeOtherLabel => 'קובץ אחר';
 
   @override
-  String get sActionPlayHint => 'play';
+  String get sActionPlayHint => 'נגן';
 
   @override
-  String get sActionPreviewHint => 'preview';
+  String get sActionPreviewHint => 'תצוגה מקדימה';
 
   @override
-  String get sActionSelectHint => 'select';
+  String get sActionSelectHint => 'בחר';
 
   @override
-  String get sActionSwitchPathLabel => 'switch path';
+  String get sActionSwitchPathLabel => 'החלף תיקייה';
 
   @override
-  String get sActionUseCameraHint => 'use camera';
+  String get sActionUseCameraHint => 'השתמש במצלמה';
 
   @override
-  String get sNameDurationLabel => 'duration';
+  String get sNameDurationLabel => 'משך';
 
   @override
-  String get sUnitAssetCountLabel => 'count';
+  String get sUnitAssetCountLabel => 'כמות';
+
+  @override
+  AssetPickerTextDelegate get semanticsTextDelegate {
+    if (Platform.isAndroid) {
+      return EnglishAssetPickerTextDelegate();
+    }
+    return this;
+  }
 }
 
 /// [AssetPickerTextDelegate] implementiert mit der deutschen Übersetzung.
@@ -489,6 +508,39 @@ class RussianAssetPickerTextDelegate extends AssetPickerTextDelegate {
 
   @override
   String get accessiblePathName => 'Доступные файлы';
+
+  @override
+  String get sTypeAudioLabel => 'Аудио';
+
+  @override
+  String get sTypeImageLabel => 'Изображение';
+
+  @override
+  String get sTypeVideoLabel => 'Видео';
+
+  @override
+  String get sTypeOtherLabel => 'Другой файл';
+
+  @override
+  String get sActionPlayHint => 'воспроизвести';
+
+  @override
+  String get sActionPreviewHint => 'просмотреть';
+
+  @override
+  String get sActionSelectHint => 'выбрать';
+
+  @override
+  String get sActionSwitchPathLabel => 'изменить путь';
+
+  @override
+  String get sActionUseCameraHint => 'использовать камеру';
+
+  @override
+  String get sNameDurationLabel => 'продолжительность';
+
+  @override
+  String get sUnitAssetCountLabel => 'количество';
 }
 
 /// [AssetPickerTextDelegate] implements with Japanese.
@@ -678,6 +730,9 @@ class FrenchAssetPickerTextDelegate extends AssetPickerTextDelegate {
   String get select => 'Choisir';
 
   @override
+  String get emptyList => 'Liste vide';
+
+  @override
   String get unSupportedAssetType => 'Type de fichier non supporté';
 
   @override
@@ -708,5 +763,35 @@ class FrenchAssetPickerTextDelegate extends AssetPickerTextDelegate {
   String get accessiblePathName => 'Medias accessible';
 
   @override
-  String get emptyList => 'Liste vide';
+  String get sTypeAudioLabel => "l'audio";
+
+  @override
+  String get sTypeImageLabel => 'image';
+
+  @override
+  String get sTypeVideoLabel => 'vidéo';
+
+  @override
+  String get sTypeOtherLabel => 'Autre';
+
+  @override
+  String get sActionPlayHint => 'jouer';
+
+  @override
+  String get sActionPreviewHint => 'aperçu';
+
+  @override
+  String get sActionSelectHint => 'choisir';
+
+  @override
+  String get sActionSwitchPathLabel => 'changer le dossier';
+
+  @override
+  String get sActionUseCameraHint => 'Utiliser la Caméra';
+
+  @override
+  String get sNameDurationLabel => 'durée';
+
+  @override
+  String get sUnitAssetCountLabel => 'quantité';
 }
