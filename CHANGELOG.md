@@ -1,5 +1,23 @@
 # Changelog
 
+## 7.0.0-dev.4
+
+- Improve scaling with select indicators and numbers.
+- Fix `LocallyAvailableBuilder` with more edge conditions. (#263)
+- Fix potentially "No elements" error with thumbnails.
+- Support predictable special item display. (#264)
+
+## 7.0.0-dev.3
+
+- Semantics support with multiple text delegates. (#235, #240, #242, #243, #245, #254)
+- Expose `AssetPickerPageRoute` for customization. (#248)
+- Support live photos display. (#251)
+
+### Breaking changes
+
+- Architecture refactor partially for better customization. (#241)
+- Configs are all abstracted as `AssetPickerConfig`. (#250)
+
 ## 7.0.0-dev.2
 
 - Add full semantics support. (#232)
