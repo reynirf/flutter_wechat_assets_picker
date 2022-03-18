@@ -8,7 +8,7 @@ import 'package:flutter/material.dart';
 import 'package:photo_manager/photo_manager.dart';
 
 import '../constants/enums.dart';
-import '../delegates/asset_picker_builder_delegate.dart';
+import '../constants/typedefs.dart';
 import '../delegates/asset_picker_viewer_builder_delegate.dart';
 import '../provider/asset_picker_provider.dart';
 import '../provider/asset_picker_viewer_provider.dart';
@@ -34,7 +34,7 @@ class AssetPickerViewer<Asset, Path> extends StatefulWidget {
     required List<AssetEntity> previewAssets,
     required ThemeData themeData,
     DefaultAssetPickerProvider? selectorProvider,
-    List<int>? previewThumbSize,
+    ThumbnailSize? previewThumbnailSize,
     List<AssetEntity>? selectedAssets,
     SpecialPickerType? specialPickerType,
     int? maxAssets,
@@ -50,7 +50,7 @@ class AssetPickerViewer<Asset, Path> extends StatefulWidget {
             ? AssetPickerViewerProvider<AssetEntity>(selectedAssets)
             : null,
         themeData: themeData,
-        previewThumbSize: previewThumbSize,
+        previewThumbnailSize: previewThumbnailSize,
         specialPickerType: specialPickerType,
         selectedAssets: selectedAssets,
         selectorProvider: selectorProvider,

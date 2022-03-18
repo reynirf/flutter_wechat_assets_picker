@@ -13,13 +13,16 @@
 
 Language: [English](README.md) | 中文
 
-基于微信 UI 的 **资源选择器**，基于 `photo_manager` 实现资源相关功能，
-`extended_image` 用于查看图片，`provider` 用于协助管理选择器的状态。
+基于微信 UI 的 **资源选择器**，
+基于 [`photo_manager`](https://pub.flutter-io.cn/packages/photo_manager) 实现资源相关功能，
+[`extended_image`](https://pub.flutter-io.cn/packages/extended_image) 用于查看图片，
+[`provider`](https://pub.flutter-io.cn/packages/provider) 用于协助管理选择器的状态。
 
 需要拍照及录制视频，请查看示例的详细用法，
 并前往 [wechat_camera_picker](https://pub.flutter-io.cn/packages/wechat_camera_picker) 。
 
-所有的界面细节基于 **微信 8.x 版本**，将在微信版本更新后随时进行跟进。
+当前的界面设计基于的微信版本：**8.x**
+界面更新将在微信版本更新后随时进行跟进。
 
 **注意：** 如果你觉得你的自定义实现会在某些程度上帮助其他人实现他们的需求，你可以通过 PR 提交你的自定义实现。
 更多信息请参考 [贡献自定义实现](example/lib/customs/CONTRIBUTING.md) 。
@@ -60,7 +63,7 @@ Language: [English](README.md) | 中文
 - 💚 99% 的微信风格
 - ⚡️ 根据参数可调的性能优化
 - 📷 图片资源支持
-  - 🔬 HEIC/HEIF 格式图片支持
+  - 🔬 HEIF 格式图片支持
 - 🎥 视频资源支持
 - 🎶 音频资源支持
 - 1️⃣ 单资源模式
@@ -76,7 +79,7 @@ Language: [English](README.md) | 中文
 ## 截图 📸
 
 | ![1](https://pic.alexv525.com/2021-07-05-picker_1.jpg)   | ![2](https://pic.alexv525.com/2021-07-05-picker_2.jpg)   | ![3](https://pic.alexv525.com/2021-07-05-picker_3.jpg)   |
-| -------------------------------------------------------- | -------------------------------------------------------- | -------------------------------------------------------- |
+|----------------------------------------------------------|----------------------------------------------------------|----------------------------------------------------------|
 | ![4](https://pic.alexv525.com/2021-07-05-picker_4.jpg)   | ![5](https://pic.alexv525.com/2021-07-05-picker_5.jpg)   | ![6](https://pic.alexv525.com/2021-07-05-picker_6.jpg)   |
 | ![7](https://pic.alexv525.com/2021-07-06-picker_7.jpg)   | ![8](https://pic.alexv525.com/2021-07-05-picker_8.jpg)   | ![9](https://pic.alexv525.com/2021-07-05-picker_9-1.jpg) |
 | ![10](https://pic.alexv525.com/2021-07-05-picker_10.png) | ![10](https://pic.alexv525.com/2021-07-05-picker_11.png) | ![12](https://pic.alexv525.com/2021-07-05-picker_12.png) |
@@ -91,14 +94,13 @@ Language: [English](README.md) | 中文
 
 ### 版本兼容
 
-|        | 2.0.0 | 2.2.0 | 2.5.0 |
-|--------|:-----:|:-----:|:-----:|
-| 6.2.1+ |   ❌   |   ❌   |   ✅   |
-| 6.2.0  |   ✅   |   ✅   |   ✅   |
-| 5.0.0+ |   ✅   |  N/A  |  N/A  |
+|        | <2.5.0 | 2.8.0 | 2.10.0 |
+|--------|:------:|:-----:|:------:|
+| 7.0.0+ |   ❌    |   ✅   |   ✅    |
+| 6.3.0+ |   ❌    |   ✅   |   ✅    |
 
-如果在 `flutter pub get` 时遇到了失败问题，请使用 `dependency_overrides` 解决。
-参考 [版本获取冲突](#xxx-版本获取冲突-例如-dartx)。
+如果在 `flutter pub get` 时遇到了 `resolve conflict` 失败问题，
+请使用 `dependency_overrides` 解决。
 
 ### Flutter
 
@@ -167,55 +169,57 @@ platform :ios, '9.0'
 
 ## 使用方法 📖
 
-| 参数名                     | 类型                    | 描述                                      | 默认值             |
-| ------------------------- | ---------------------- | ------------------------------------------------ | ------------------- |
-| selectedAssets            | `List<AssetEntity>?`   | 已选的资源。确保不重复选择。如果你允许重复选择，请将其置空。 | `null`              |
-| maxAssets                 | `int`                  | 最多选择的图片数量                      | 9                   |
-| pageSize                  | `int`                  | 分页加载时每页加载的资源数量。**必须为网格数的倍数。** 设置为`null`可以取消分页。 | 320 (80 * 4) |
-| gridThumbSize             | `int`                  | 预览网格的缩略图大小                     | 200                  |
-| pathThumbSize             | `int`                  | 路径选择器的缩略图大小                    | 80                  |
-| previewThumbSize          | `List<int>?`           | 预览时图片的缩略图大小                    | `null`                 |
-| gridCount                 | `int`                  | 选择器网格数量                        | 4                   |
-| requestType               | `RequestType`          | 选择器选择资源的类型                    | `RequestType.image` |
-| specialPickerType         | `SpecialPickerType?`   | 提供一些特殊的选择器类型以整合非常规的选择行为 | `null` |
-| themeColor                | `Color?`               | 选择器的主题色  | `Color(0xff00bc56)` |
-| pickerTheme               | `ThemeData?`           | 选择器的主题提供，包括查看器 | `null` |
-| sortPathDelegate          | `SortPathDeleage?`     | 资源路径的排序实现，可自定义路径排序方法 | `CommonSortPathDelegate` |
-| textDelegate              | `DefaultAssetsPickerTextDelegate?` | 选择器的文本代理构建，用于自定义文本 | `DefaultAssetsPickerTextDelegate()` |
-| filterOptions             | `FilterOptionGroup?`   | 允许用户自定义资源过滤条件 | `null` |
-| specialItemBuilder        | `WidgetBuilder?`       | 自定义item的构造方法 | `null` |
-| specialItemPosition       | `SpecialItemPosition`  | 允许用户在选择器中添加一个自定义item，并指定位置。 | `SpecialPosition.none` |
-| loadingIndicatorBuilder   | `IndicatorBuilder?`    | 加载器的实现                          | `null`                  |
-| allowSpecialItemWhenEmpty | `bool`                 | 在资源为空时是否允许显示自定义item  | `false` |
-| selectPredicate           | `AssetSelectPredicate` | 判断资源可否被选择 | `null`                              |
-| shouldRevertGrid          | `bool?`                | 判断资源网格是否需要倒序排列 | `null`                              |
-| routeCurve                | `Curve`                | 选择构造路由动画的曲线 | `Curves.easeIn` |
-| routeDuration             | `Duration`             | 选择构造路由动画的时间 | `const Duration(milliseconds: 500)` |
-
 ### 简单的使用方法
 
 ```dart
-final List<AssetEntity> assets = await AssetPicker.pickAssets(context);
+final List<AssetEntity>? result = await AssetPicker.pickAssets(context);
 ```
 
-### 使用自定义代理
+你可以使用 `AssetPickerConfig` 来调整选择时的行为。
 
 ```dart
-final YourAssetPickerProvider provider = yourProvider;
-final CustomAssetPickerBuilderDelegate builder = yourBuilder(provider);
-final List<YourAssetEntity>? result = await AssetPicker.pickAssetsWithDelegate(
+final List<AssetEntity>? result = await AssetPicker.pickAssets(
   context,
-  provider: provider,
-  delegate: builder,
+  pickerConfig: const AssetPickerConfig(),
 );
 ```
 
-你只能在使用 `pickAssetsWithDelegate` 方法时使用 `keepScrollOffset` 的功能。
-更多细节请查看示例内的 `Keep scroll offset` 方法。
+`AssetPickerConfig` 的成员说明：
+
+| 参数名                     | 类型                                   | 描述                          | 默认值                         |
+|-------------------------|--------------------------------------|-----------------------------|-----------------------------|
+| selectedAssets          | `List<AssetEntity>?`                 | 已选的资源。确保不重复选择。              | `null`                      |
+| maxAssets               | `int`                                | 最多选择的图片数量                   | 9                           |
+| pageSize                | `int`                                | 分页加载时每页加载的资源数量。**必须为网格数的倍数。 | 80                          |
+| gridThumbnailSize       | `ThumbnailSize`                      | 预览网格的缩略图大小                  | `ThumbnailSize.square(200)` |
+| pathThumbnailSize       | `ThumbnailSize`                      | 路径选择器的缩略图大小                 | `ThumbnailSize.square(80)`  |
+| previewThumbnailSize    | `ThumbnailSize?`                     | 预览时图片的缩略图大小                 | `null`                      |
+| requestType             | `RequestType`                        | 选择器选择资源的类型                  | `RequestType.common`        |
+| specialPickerType       | `SpecialPickerType?`                 | 提供一些特殊的选择器类型以整合非常规的选择行为     | `null`                      |
+| keepScrollOffset        | `bool`                               | 选择器是否可以从同样的位置开始选择           | `null`                      |
+| sortPathDelegate        | `SortPathDelegate<AssetPathEntity>?` | 资源路径的排序实现，可自定义路径排序方法        | `CommonSortPathDelegate`    |
+| filterOptions           | `FilterOptionGroup?`                 | 允许用户自定义资源过滤条件               | `null`                      |
+| gridCount               | `int`                                | 选择器网格数量                     | 4                           |
+| themeColor              | `Color?`                             | 选择器的主题色                     | `Color(0xff00bc56)`         |
+| pickerTheme             | `ThemeData?`                         | 选择器的主题提供，包括查看器              | `null`                      |
+| textDelegate            | `AssetPickerTextDelegate?`           | 选择器的文本代理构建，用于自定义文本          | `AssetPickerTextDelegate()` |
+| specialItemPosition     | `SpecialItemPosition`                | 允许用户在选择器中添加一个自定义item，并指定位置。 | `SpecialPosition.none`      |
+| specialItemBuilder      | `SpecialItemBuilder?`                | 自定义item的构造方法                | `null`                      |
+| loadingIndicatorBuilder | `IndicatorBuilder?`                  | 加载器的实现                      | `null`                      |
+| selectPredicate         | `AssetSelectPredicate`               | 判断资源可否被选择                   | `null`                      |
+| shouldRevertGrid        | `bool?`                              | 判断资源网格是否需要倒序排列              | `null`                      |
 
 ### 更详细的使用方法
 
 我们已将常用的调用方法封装在 [example](example) 中。
+
+### 使用自定义代理
+
+你只能在使用 `pickAssetsWithDelegate` 方法时使用 `keepScrollOffset` 的功能。
+更多细节请查看示例内的 `Keep scroll offset` 方法。
+
+想要了解更多关于自定义代理实现的内容，
+查阅 [`example/lib/customs`](example/lib/customs)。
 
 #### 一般的调用选择情况
 
@@ -237,8 +241,9 @@ final List<YourAssetEntity>? result = await AssetPicker.pickAssetsWithDelegate(
 #### 自定义选择器
 
 你可以在「Custom」页面尝试自定义的选择器。
-目前我们只提供了一个基于 `Directory` 和 `File`
-（与 `photo_manager` 完全无关）实现的选择器。
+目前我们提供了一个基于 `Directory` 和 `File`
+（与 `photo_manager` 完全无关）实现的选择器，
+以及一个多 Tab 页切换的选择器。
 如果你觉得你的实现有价值或能帮助到其他人，欢迎以 PR 的形式进行提交。
 更多细节请阅读 [贡献自定义实现][example/lib/customs/CONTRIBUTING.md]
 
@@ -336,11 +341,21 @@ class CustomSortPathDelegate extends CommonSortPathDelegate {
 
 ```dart
 final File file = your_file; // 你的 File 对象
-final Uint8List byteData = await file.readAsBytes(); // 转为 Uint8List
-final AssetEntity imageEntity = await PhotoManager.editor.saveImage(byteData); // 存入手机并生成 AssetEntity
+final String path = file.path;
+final AssetEntity fileEntity = await PhotoManager.editor.saveImageWithPath(
+  path,
+  title: basename(path),
+); // 存入手机并生成 AssetEntity
+
+final Uint8List data = your_data; // 你的 Uint8List 对象
+final AssetEntity imageEntity = await PhotoManager.editor.saveImage(
+  file.path,
+  title: '带有后缀的名称.jpg',
+); // 存入手机并生成 AssetEntity
 ```
 
-如果不想保留文件，可以在操作完成（上传完或业务处理完）后进行删除：
+**注意：如果不想保留文件，请尽量用 `File` 承载中间操作，**
+否则在调用 `AssetEntity` 的删除时，某些系统下会触发系统弹窗事件：
 
 ```dart
 final List<String> result = await PhotoManager.editor.deleteWithIds([entity.id]);
@@ -379,4 +394,4 @@ Android 将默认包含 `ACCESS_MEDIA_LOCATION` 权限。
 感谢 [JetBrains](https://www.jetbrains.com/?from=fluttercandies) 为开源项目提供免费的
 [IntelliJ IDEA](https://www.jetbrains.com/idea/?from=fluttercandies) 等 IDE 的授权。
 
-[<img src=".github/jetbrains-variant.png" width="200"/>](https://www.jetbrains.com/?from=fluttercandies)
+[<img src="https://github.com/fluttercandies/flutter_wechat_assets_picker/raw/master/.github/jetbrains-variant.png" width="200"/>](https://www.jetbrains.com/?from=fluttercandies)
