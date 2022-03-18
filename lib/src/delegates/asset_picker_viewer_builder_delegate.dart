@@ -13,12 +13,12 @@ import 'package:flutter/services.dart';
 import 'package:photo_manager/photo_manager.dart';
 import 'package:provider/provider.dart';
 
-import '../constants/constants.dart';
 import '../constants/custom_scroll_physics.dart';
 import '../constants/enums.dart';
 import '../constants/extensions.dart';
-import '../delegates/asset_picker_builder_delegate.dart';
+import '../constants/typedefs.dart';
 import '../delegates/asset_picker_text_delegate.dart';
+import '../internal/singleton.dart';
 import '../provider/asset_picker_provider.dart';
 import '../provider/asset_picker_viewer_provider.dart';
 import '../widget/asset_picker_viewer.dart';
@@ -27,7 +27,6 @@ import '../widget/builder/fade_image_builder.dart';
 import '../widget/builder/image_page_builder.dart';
 import '../widget/builder/value_listenable_builder_2.dart';
 import '../widget/builder/video_page_builder.dart';
-import '../widget/custom_checkbox.dart';
 import '../widget/scale_text.dart';
 
 abstract class AssetPickerViewerBuilderDelegate<Asset, Path> {
@@ -153,7 +152,10 @@ abstract class AssetPickerViewerBuilderDelegate<Asset, Path> {
   /// 当前平台是否为苹果系列系统
   bool get isAppleOS => Platform.isIOS || Platform.isMacOS;
 
-  AssetPickerTextDelegate get textDelegate => Constants.textDelegate;
+  AssetPickerTextDelegate get textDelegate => Singleton.textDelegate;
+
+  AssetPickerTextDelegate get semanticsTextDelegate =>
+      Singleton.textDelegate.semanticsTextDelegate;
 
   /// Call when viewer is calling [initState].
   /// 当预览器调用 [initState] 时注册 [State] 和 [TickerProvider]。
@@ -327,6 +329,7 @@ abstract class AssetPickerViewerBuilderDelegate<Asset, Path> {
         textDelegate.loadFailed,
         textAlign: TextAlign.center,
         style: const TextStyle(fontSize: 18.0),
+        semanticsLabel: semanticsTextDelegate.loadFailed,
       ),
     );
   }
@@ -361,7 +364,7 @@ class DefaultAssetPickerViewerBuilderDelegate
     required ThemeData themeData,
     AssetPickerViewerProvider<AssetEntity>? provider,
     List<AssetEntity>? selectedAssets,
-    this.previewThumbSize,
+    this.previewThumbnailSize,
     this.specialPickerType,
     int? maxAssets,
     bool shouldReversePreview = false,
@@ -380,7 +383,7 @@ class DefaultAssetPickerViewerBuilderDelegate
 
   /// Thumb size for the preview of images in the viewer.
   /// 预览时图片的缩略图大小
-  final List<int>? previewThumbSize;
+  final ThumbnailSize? previewThumbnailSize;
 
   /// The current special picker type for the viewer.
   /// 当前特殊选择类型
@@ -413,7 +416,7 @@ class DefaultAssetPickerViewerBuilderDelegate
         _builder = ImagePageBuilder(
           asset: asset,
           delegate: this,
-          previewThumbSize: previewThumbSize,
+          previewThumbnailSize: previewThumbnailSize,
         );
         break;
       case AssetType.video:
@@ -425,7 +428,10 @@ class DefaultAssetPickerViewerBuilderDelegate
         break;
       case AssetType.other:
         _builder = Center(
-          child: ScaleText(textDelegate.unSupportedAssetType),
+          child: ScaleText(
+            textDelegate.unSupportedAssetType,
+            semanticsLabel: semanticsTextDelegate.unSupportedAssetType,
+          ),
         );
         break;
     }
@@ -441,14 +447,15 @@ class DefaultAssetPickerViewerBuilderDelegate
                   true;
           String hint = '';
           if (asset.type == AssetType.audio || asset.type == AssetType.video) {
-            hint += '${textDelegate.sNameDurationLabel}: ';
+            hint += '${semanticsTextDelegate.sNameDurationLabel}: ';
             hint += textDelegate.durationIndicatorBuilder(asset.videoDuration);
           }
           if (asset.title?.isNotEmpty == true) {
             hint += ', ${asset.title}';
           }
           return Semantics(
-            label: '${textDelegate.semanticTypeLabel(asset.type)}${index + 1}, '
+            label: '${semanticsTextDelegate.semanticTypeLabel(asset.type)}'
+                '${index + 1}, '
                 '${asset.createDateTime.toString().replaceAll('.000', '')}',
             selected: isSelected,
             hint: hint,
@@ -651,11 +658,11 @@ class DefaultAssetPickerViewerBuilderDelegate
               }
             }();
             return Semantics(
-              label: '${textDelegate.semanticTypeLabel(asset.type)}'
+              label: '${semanticsTextDelegate.semanticTypeLabel(asset.type)}'
                   '${index + 1}',
               selected: isViewing,
               onTap: () => onTap(asset),
-              onTapHint: textDelegate.sActionPreviewHint,
+              onTapHint: semanticsTextDelegate.sActionPreviewHint,
               excludeSemantics: true,
               child: GestureDetector(
                 onTap: () => onTap(asset),
@@ -834,6 +841,18 @@ class DefaultAssetPickerViewerBuilderDelegate
                 fontSize: 17,
                 fontWeight: FontWeight.normal,
               ),
+              semanticsLabel: () {
+                if (isWeChatMoment && hasVideo) {
+                  return semanticsTextDelegate.confirm;
+                }
+                if (provider!.isSelectedNotEmpty) {
+                  return '${semanticsTextDelegate.confirm}'
+                      ' (${provider.currentlySelectedAssets.length}'
+                      '/'
+                      '${selectorProvider!.maxAssets})';
+                }
+                return semanticsTextDelegate.confirm;
+              }(),
             ),
             onPressed: () {
               if (isWeChatMoment && hasVideo) {
@@ -897,7 +916,7 @@ class DefaultAssetPickerViewerBuilderDelegate
     bool isSelected,
     AssetEntity asset,
   ) {
-    return CustomCheckbox(
+    return Checkbox(
       value: isSelected,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(999999),
@@ -924,11 +943,12 @@ class DefaultAssetPickerViewerBuilderDelegate
               final bool isSelected = assets.contains(asset);
               return Semantics(
                 selected: isSelected,
-                label: textDelegate.select,
+                label: semanticsTextDelegate.select,
                 onTap: () => onChangingSelected(context, asset, isSelected),
-                onTapHint: textDelegate.select,
+                onTapHint: semanticsTextDelegate.select,
                 excludeSemantics: true,
                 child: Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
                   children: <Widget>[
                     if (isAppleOS)
                       _appleOSSelectButton(c, isSelected, asset)
@@ -938,6 +958,7 @@ class DefaultAssetPickerViewerBuilderDelegate
                       ScaleText(
                         textDelegate.select,
                         style: const TextStyle(fontSize: 17, height: 1),
+                        semanticsLabel: semanticsTextDelegate.select,
                       ),
                   ],
                 ),
