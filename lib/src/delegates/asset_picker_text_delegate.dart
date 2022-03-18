@@ -8,7 +8,7 @@ import 'package:flutter/rendering.dart';
 import 'package:photo_manager/photo_manager.dart' show AssetType;
 
 /// All text delegates.
-final List<AssetPickerTextDelegate> assetPickerTextDelegates =
+const List<AssetPickerTextDelegate> assetPickerTextDelegates =
     <AssetPickerTextDelegate>[
   AssetPickerTextDelegate(),
   EnglishAssetPickerTextDelegate(),
@@ -23,7 +23,7 @@ final List<AssetPickerTextDelegate> assetPickerTextDelegates =
 /// Obtain the text delegate from the given locale.
 AssetPickerTextDelegate assetPickerTextDelegateFromLocale(Locale? locale) {
   if (locale == null) {
-    return AssetPickerTextDelegate();
+    return const AssetPickerTextDelegate();
   }
   final String languageCode = locale.languageCode.toLowerCase();
   for (final AssetPickerTextDelegate delegate in assetPickerTextDelegates) {
@@ -31,12 +31,14 @@ AssetPickerTextDelegate assetPickerTextDelegateFromLocale(Locale? locale) {
       return delegate;
     }
   }
-  return AssetPickerTextDelegate();
+  return const AssetPickerTextDelegate();
 }
 
 /// Text delegate that controls text in widgets.
 /// 控制部件中的文字实现
 class AssetPickerTextDelegate {
+  const AssetPickerTextDelegate();
+
   String get languageCode => 'zh';
 
   /// Confirm string for the confirm button.
@@ -164,6 +166,8 @@ class AssetPickerTextDelegate {
 /// [AssetPickerTextDelegate] implements with English.
 /// English Localization
 class EnglishAssetPickerTextDelegate extends AssetPickerTextDelegate {
+  const EnglishAssetPickerTextDelegate();
+
   @override
   String get languageCode => 'en';
 
@@ -258,6 +262,8 @@ class EnglishAssetPickerTextDelegate extends AssetPickerTextDelegate {
 /// [AssetPickerTextDelegate] implements with Hebrew.
 /// תרגום בשפה העברית
 class HebrewAssetPickerTextDelegate extends AssetPickerTextDelegate {
+  const HebrewAssetPickerTextDelegate();
+
   @override
   String get languageCode => 'he';
 
@@ -350,7 +356,7 @@ class HebrewAssetPickerTextDelegate extends AssetPickerTextDelegate {
   @override
   AssetPickerTextDelegate get semanticsTextDelegate {
     if (Platform.isAndroid) {
-      return EnglishAssetPickerTextDelegate();
+      return const EnglishAssetPickerTextDelegate();
     }
     return this;
   }
@@ -359,6 +365,8 @@ class HebrewAssetPickerTextDelegate extends AssetPickerTextDelegate {
 /// [AssetPickerTextDelegate] implementiert mit der deutschen Übersetzung.
 /// Deutsche Textimplementierung.
 class GermanAssetPickerTextDelegate extends AssetPickerTextDelegate {
+  const GermanAssetPickerTextDelegate();
+
   @override
   String get languageCode => 'de';
 
@@ -451,6 +459,8 @@ class GermanAssetPickerTextDelegate extends AssetPickerTextDelegate {
 /// [AssetPickerTextDelegate] implements with Russian.
 /// Локализация на русский язык.
 class RussianAssetPickerTextDelegate extends AssetPickerTextDelegate {
+  const RussianAssetPickerTextDelegate();
+
   @override
   String get languageCode => 'ru';
 
@@ -546,11 +556,13 @@ class RussianAssetPickerTextDelegate extends AssetPickerTextDelegate {
 /// [AssetPickerTextDelegate] implements with Japanese.
 /// 日本語の TextDelegate
 class JapaneseAssetPickerTextDelegate extends AssetPickerTextDelegate {
+  const JapaneseAssetPickerTextDelegate();
+
   @override
   String get languageCode => 'ja';
 
   @override
-  String get confirm => '決定';
+  String get confirm => '確認';
 
   @override
   String get cancel => 'キャンセル';
@@ -559,10 +571,10 @@ class JapaneseAssetPickerTextDelegate extends AssetPickerTextDelegate {
   String get edit => '編集';
 
   @override
-  String get gifIndicator => 'GIF';
+  String get gifIndicator => 'GIF画像';
 
   @override
-  String get loadFailed => '読み込みに失敗しました。';
+  String get loadFailed => '読み込みに失敗しました';
 
   @override
   String get original => '元の画像';
@@ -574,25 +586,25 @@ class JapaneseAssetPickerTextDelegate extends AssetPickerTextDelegate {
   String get select => '選択';
 
   @override
-  String get emptyList => '空リスト';
+  String get emptyList => 'リストが空です';
 
   @override
-  String get unSupportedAssetType => 'HEIC フォーマットはサポートしていません。';
+  String get unSupportedAssetType => '未対応のフォーマット';
 
   @override
-  String get unableToAccessAll => 'すべてのリソースにアクセスできない';
+  String get unableToAccessAll => 'すべてのリソースへのアクセスができない';
 
   @override
-  String get viewingLimitedAssetsTip => 'このアプリは一部のリソース及'
-      'びアルバムのみにアクセスできる';
+  String get viewingLimitedAssetsTip => 'アプリは一部のリソースと'
+      '写真にしかアクセスできない';
 
   @override
-  String get changeAccessibleLimitedAssets => 'アクセスできるリソースを設置';
+  String get changeAccessibleLimitedAssets => 'アクセスできるリソースを設定する';
 
   @override
-  String get accessAllTip => 'アプリがデバイスの一部のリソースの'
-      'みにアクセスするように設定され、'
-      '「すべてのリソースへ」にアクセスする権限を許可してください';
+  String get accessAllTip => 'アプリがデバイスのリソースの一部にのみ'
+      'アクセスするように設定されています。'
+      '「すべてのリソース」へのアクセスを許可することを推奨します';
 
   @override
   String get goToSystemSettings => '「システム設定」に移動';
@@ -602,11 +614,46 @@ class JapaneseAssetPickerTextDelegate extends AssetPickerTextDelegate {
 
   @override
   String get accessiblePathName => 'アクセスできるリソース';
+
+  @override
+  String get sTypeAudioLabel => 'オーディオ';
+
+  @override
+  String get sTypeImageLabel => '画像';
+
+  @override
+  String get sTypeVideoLabel => '動画';
+
+  @override
+  String get sTypeOtherLabel => 'その他のリソース';
+
+  @override
+  String get sActionPlayHint => '再生';
+
+  @override
+  String get sActionPreviewHint => 'プレビュー';
+
+  @override
+  String get sActionSelectHint => '選択';
+
+  @override
+  String get sActionSwitchPathLabel => 'パス切り替え';
+
+  @override
+  String get sActionUseCameraHint => 'カメラを使う';
+
+  @override
+  String get sNameDurationLabel => '動画の時間';
+
+  @override
+  String get sUnitAssetCountLabel => '数';
 }
 
 /// [AssetPickerTextDelegate] implements with Arabic.
 /// الترجمة العربية
 class ArabicAssetPickerTextDelegate extends AssetPickerTextDelegate {
+  const ArabicAssetPickerTextDelegate();
+
   @override
   String get languageCode => 'ar';
 
@@ -702,6 +749,8 @@ class ArabicAssetPickerTextDelegate extends AssetPickerTextDelegate {
 /// [AssetPickerTextDelegate] implements with French.
 /// Délégué texte français
 class FrenchAssetPickerTextDelegate extends AssetPickerTextDelegate {
+  const FrenchAssetPickerTextDelegate();
+
   @override
   String get languageCode => 'fr';
 

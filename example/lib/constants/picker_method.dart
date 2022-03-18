@@ -6,6 +6,13 @@ import 'package:flutter/material.dart';
 import 'package:wechat_assets_picker/wechat_assets_picker.dart';
 import 'package:wechat_camera_picker/wechat_camera_picker.dart';
 
+Future<AssetEntity?> _pickFromCamera(BuildContext c) {
+  return CameraPicker.pickFromCamera(
+    c,
+    pickerConfig: const CameraPickerConfig(enableRecording: true),
+  );
+}
+
 /// Define a regular pick method.
 class PickMethod {
   const PickMethod({
@@ -79,6 +86,7 @@ class PickMethod {
       name: 'Pick from camera',
       description: 'Allow pick an asset through camera.',
       method: (BuildContext context, List<AssetEntity> assets) {
+        const AssetPickerTextDelegate textDelegate = AssetPickerTextDelegate();
         return AssetPicker.pickAssets(
           context,
           pickerConfig: AssetPickerConfig(
@@ -95,18 +103,14 @@ class PickMethod {
                 return null;
               }
               return Semantics(
-                label: AssetPickerTextDelegate().sActionUseCameraHint,
+                label: textDelegate.sActionUseCameraHint,
                 button: true,
-                onTapHint: AssetPickerTextDelegate().sActionUseCameraHint,
+                onTapHint: textDelegate.sActionUseCameraHint,
                 child: GestureDetector(
                   behavior: HitTestBehavior.opaque,
                   onTap: () async {
                     Feedback.forTap(context);
-                    final AssetEntity? result =
-                        await CameraPicker.pickFromCamera(
-                      context,
-                      enableRecording: true,
-                    );
+                    final AssetEntity? result = await _pickFromCamera(context);
                     if (result != null) {
                       handleResult(context, result);
                     }
@@ -130,6 +134,7 @@ class PickMethod {
       description: 'Take a photo or video with the camera picker, '
           'select the result and stay in the entities list.',
       method: (BuildContext context, List<AssetEntity> assets) {
+        const AssetPickerTextDelegate textDelegate = AssetPickerTextDelegate();
         return AssetPicker.pickAssets(
           context,
           pickerConfig: AssetPickerConfig(
@@ -146,17 +151,13 @@ class PickMethod {
                 return null;
               }
               return Semantics(
-                label: AssetPickerTextDelegate().sActionUseCameraHint,
+                label: textDelegate.sActionUseCameraHint,
                 button: true,
-                onTapHint: AssetPickerTextDelegate().sActionUseCameraHint,
+                onTapHint: textDelegate.sActionUseCameraHint,
                 child: GestureDetector(
                   behavior: HitTestBehavior.opaque,
                   onTap: () async {
-                    final AssetEntity? result =
-                        await CameraPicker.pickFromCamera(
-                      context,
-                      enableRecording: true,
-                    );
+                    final AssetEntity? result = await _pickFromCamera(context);
                     if (result == null) {
                       return;
                     }
@@ -333,7 +334,7 @@ class PickMethod {
           pickerConfig: AssetPickerConfig(
             maxAssets: maxAssetsCount,
             selectedAssets: assets,
-            textDelegate: EnglishAssetPickerTextDelegate(),
+            textDelegate: const EnglishAssetPickerTextDelegate(),
           ),
         );
       },
