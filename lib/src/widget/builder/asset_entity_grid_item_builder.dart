@@ -1,7 +1,7 @@
-///
-/// [Author] Alex (https://github.com/AlexV525)
-/// [Date] 2021/5/11 11:37
-///
+// Copyright 2019 The FlutterCandies author. All rights reserved.
+// Use of this source code is governed by an Apache license that can be found
+// in the LICENSE file.
+
 import 'package:extended_image/extended_image.dart';
 import 'package:flutter/material.dart';
 import 'package:photo_manager/photo_manager.dart';
@@ -11,10 +11,10 @@ import '../../widget/scale_text.dart';
 
 class AssetEntityGridItemBuilder extends StatefulWidget {
   const AssetEntityGridItemBuilder({
-    Key? key,
+    super.key,
     required this.image,
     required this.failedItemBuilder,
-  }) : super(key: key);
+  });
 
   final AssetEntityImageProvider image;
   final WidgetBuilder failedItemBuilder;
@@ -63,7 +63,6 @@ class AssetEntityGridItemWidgetState extends State<AssetEntityGridItemBuilder> {
   }
 
   @override
-  @mustCallSuper
   Widget build(BuildContext context) {
     child ??= newChild;
     return child!;

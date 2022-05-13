@@ -1,7 +1,7 @@
-///
-/// [Author] Alex (https://github.com/AlexV525)
-/// [Date] 2022/2/14 13:25
-///
+// Copyright 2019 The FlutterCandies author. All rights reserved.
+// Use of this source code is governed by an Apache license that can be found
+// in the LICENSE file.
+
 import 'package:flutter/material.dart';
 import 'package:photo_manager/photo_manager.dart';
 
@@ -33,6 +33,8 @@ class AssetPickerConfig {
     this.loadingIndicatorBuilder,
     this.selectPredicate,
     this.shouldRevertGrid,
+    this.limitedPermissionOverlayPredicate,
+    this.pathNameBuilder,
   })  : assert(maxAssets >= 1, 'maxAssets must be greater than 1.'),
         assert(
           pickerTheme == null || themeColor == null,
@@ -107,14 +109,16 @@ class AssetPickerConfig {
   /// 当前特殊选择类型
   ///
   /// Several types which are special:
-  /// * [SpecialPickerType.wechatMoment] When user selected video, no more images
-  /// can be selected.
-  /// * [SpecialPickerType.noPreview] Disable preview of asset; Clicking on an
-  /// asset selects it.
+  /// * [SpecialPickerType.wechatMoment] When user selected video,
+  ///   no more images can be selected.
+  /// * [SpecialPickerType.noPreview] Disable preview of asset;
+  ///   Clicking on an asset selects it.
   ///
   /// 这里包含一些特殊选择类型：
-  /// * [SpecialPickerType.wechatMoment] 微信朋友圈模式。当用户选择了视频，将不能选择图片。
-  /// * [SpecialPickerType.noPreview] 禁用资源预览。多选时单击资产将直接选中，单选时选中并返回。
+  /// * [SpecialPickerType.wechatMoment] 微信朋友圈模式。
+  ///   当用户选择了视频，将不能选择图片。
+  /// * [SpecialPickerType.noPreview] 禁用资源预览。
+  ///   多选时单击资产将直接选中，单选时选中并返回。
   final SpecialPickerType? specialPickerType;
 
   /// Whether the picker should save the scroll offset between pushes and pops.
@@ -145,7 +149,6 @@ class AssetPickerConfig {
   ///
   /// Usually the WeChat uses the dark version (dark background color)
   /// for the picker. However, some others want a light or a custom version.
-  ///
   /// 通常情况下微信选择器使用的是暗色（暗色背景）的主题，
   /// 但某些情况下开发者需要亮色或自定义主题。
   final ThemeData? pickerTheme;
@@ -170,7 +173,13 @@ class AssetPickerConfig {
   /// Whether the assets grid should revert.
   /// 判断资源网格是否需要倒序排列
   ///
-  /// [Null] means judging by [isAppleOS].
-  /// 使用 [Null] 即使用 [isAppleOS] 进行判断。
+  /// [Null] means judging by Apple OS.
+  /// 使用 [Null] 即使用是否为 Apple 系统进行判断。
   final bool? shouldRevertGrid;
+
+  /// {@macro wechat_assets_picker.LimitedPermissionOverlayPredicate}
+  final LimitedPermissionOverlayPredicate? limitedPermissionOverlayPredicate;
+
+  /// {@macro wechat_assets_picker.PathNameBuilder}
+  final PathNameBuilder<AssetPathEntity>? pathNameBuilder;
 }

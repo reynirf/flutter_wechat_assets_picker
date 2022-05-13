@@ -1,7 +1,7 @@
-///
-/// [Author] Alex (https://github.com/Alex525)
-/// [Date] 2020/4/7 10:25
-///
+// Copyright 2019 The FlutterCandies author. All rights reserved.
+// Use of this source code is governed by an Apache license that can be found
+// in the LICENSE file.
+
 import 'dart:io' show Platform;
 
 import 'package:flutter/rendering.dart';
@@ -786,7 +786,7 @@ class FrenchAssetPickerTextDelegate extends AssetPickerTextDelegate {
 
   @override
   String get unableToAccessAll =>
-      'Impossible d\'accéder aux médias de votre appareil';
+      "Impossible d'accéder aux médias de votre appareil";
 
   @override
   String get viewingLimitedAssetsTip =>

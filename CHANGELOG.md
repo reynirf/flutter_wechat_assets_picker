@@ -1,4 +1,48 @@
+<!-- Copyright 2019 The FlutterCandies author. All rights reserved.
+Use of this source code is governed by an Apache license
+that can be found in the LICENSE file. -->
+
 # Changelog
+
+## 7.3.0
+
+Migrate to Flutter 3, drop supports for previous Flutter versions.
+
+## 7.2.0
+
+### New features
+
+- Separate `AssetPickerDelegate` (#315),
+  which provides the ability to override methods within the `AssetPicker`.
+
+### Improvements
+
+- Improve `specialItemBuilder`. (#314)
+
+## 7.1.2
+
+### Fixes
+
+- Fix context usages for inherited theme data.
+- Fix unlinked path name builder.
+
+### Improvements
+
+- Update how paths get update. (#312)
+- Expose `DefaultAssetPickerProvider.forTest`.
+
+## 7.1.1
+
+### Fixes
+
+- Fix `selectPredicate` with the viewer. (#307)
+
+## 7.1.0
+
+### New features
+
+- Add `PathNameBuilder`. (#303)
+- Add `LimitedPermissionOverlayPredicate`. (#287)
 
 ## 7.0.5
 

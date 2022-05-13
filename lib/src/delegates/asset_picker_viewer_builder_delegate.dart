@@ -1,7 +1,7 @@
-///
-/// [Author] Alex (https://github.com/AlexV525)
-/// [Date] 2020-10-31 00:15
-///
+// Copyright 2019 The FlutterCandies author. All rights reserved.
+// Use of this source code is governed by an Apache license that can be found
+// in the LICENSE file.
+
 import 'dart:async';
 import 'dart:io';
 import 'dart:math' as math;
@@ -77,9 +77,9 @@ abstract class AssetPickerViewerBuilderDelegate<Asset, Path> {
   /// 用于更新当前正在浏览的资源页码的流控制器
   ///
   /// The main purpose is to narrow down build parts when index is changing,
-  /// prevent widely [setState] and causing other widgets rebuild.
+  /// prevent widely [State.setState] and causing other widgets rebuild.
   /// 使用 [StreamController] 的主要目的是缩小页码变化时构建组件的范围，
-  /// 防止滥用 [setState] 导致其他部件重新构建。
+  /// 防止滥用 [State.setState] 导致其他部件重新构建。
   final StreamController<int> pageStreamController =
       StreamController<int>.broadcast();
 
@@ -157,8 +157,8 @@ abstract class AssetPickerViewerBuilderDelegate<Asset, Path> {
   AssetPickerTextDelegate get semanticsTextDelegate =>
       Singleton.textDelegate.semanticsTextDelegate;
 
-  /// Call when viewer is calling [initState].
-  /// 当预览器调用 [initState] 时注册 [State] 和 [TickerProvider]。
+  /// Call when viewer is calling [State.initState].
+  /// 当预览器调用 [State.initState] 时注册 [State] 和 [TickerProvider]。
   void initStateAndTicker(
     AssetPickerViewerState<Asset, Path> s,
     TickerProvider v,
@@ -303,25 +303,20 @@ abstract class AssetPickerViewerBuilderDelegate<Asset, Path> {
     ExtendedImageState state, {
     bool hasLoaded = false,
   }) {
-    Widget loader;
     switch (state.extendedImageLoadState) {
       case LoadState.completed:
-        loader = state.completedWidget;
-        if (!hasLoaded) {
-          loader = FadeImageBuilder(child: loader);
+        if (hasLoaded) {
+          return state.completedWidget;
         }
-        break;
+        return FadeImageBuilder(child: state.completedWidget);
       case LoadState.failed:
-        loader = failedItemBuilder(context);
-        break;
-      default:
-        loader = const SizedBox.shrink();
-        break;
+        return failedItemBuilder(context);
+      case LoadState.loading:
+        return const SizedBox.shrink();
     }
-    return loader;
   }
 
-  /// The item widget when [AssetEntity.thumbData] load failed.
+  /// The item widget when [AssetEntity.thumbnailData] load failed.
   /// 资源缩略数据加载失败时使用的部件
   Widget failedItemBuilder(BuildContext context) {
     return Center(
@@ -358,28 +353,18 @@ abstract class AssetPickerViewerBuilderDelegate<Asset, Path> {
 class DefaultAssetPickerViewerBuilderDelegate
     extends AssetPickerViewerBuilderDelegate<AssetEntity, AssetPathEntity> {
   DefaultAssetPickerViewerBuilderDelegate({
-    required int currentIndex,
-    required List<AssetEntity> previewAssets,
-    AssetPickerProvider<AssetEntity, AssetPathEntity>? selectorProvider,
-    required ThemeData themeData,
-    AssetPickerViewerProvider<AssetEntity>? provider,
-    List<AssetEntity>? selectedAssets,
+    required super.currentIndex,
+    required super.previewAssets,
+    required super.themeData,
+    super.selectorProvider,
+    super.provider,
+    super.selectedAssets,
     this.previewThumbnailSize,
     this.specialPickerType,
-    int? maxAssets,
-    bool shouldReversePreview = false,
-    AssetSelectPredicate<AssetEntity>? selectPredicate,
-  }) : super(
-          currentIndex: currentIndex,
-          previewAssets: previewAssets,
-          provider: provider,
-          themeData: themeData,
-          selectedAssets: selectedAssets,
-          selectorProvider: selectorProvider,
-          maxAssets: maxAssets,
-          shouldReversePreview: shouldReversePreview,
-          selectPredicate: selectPredicate,
-        );
+    super.maxAssets,
+    super.shouldReversePreview,
+    super.selectPredicate,
+  });
 
   /// Thumb size for the preview of images in the viewer.
   /// 预览时图片的缩略图大小
@@ -407,27 +392,27 @@ class DefaultAssetPickerViewerBuilderDelegate
   @override
   Widget assetPageBuilder(BuildContext context, int index) {
     final AssetEntity asset = previewAssets.elementAt(index);
-    final Widget _builder;
+    final Widget builder;
     switch (asset.type) {
       case AssetType.audio:
-        _builder = AudioPageBuilder(asset: asset);
+        builder = AudioPageBuilder(asset: asset);
         break;
       case AssetType.image:
-        _builder = ImagePageBuilder(
+        builder = ImagePageBuilder(
           asset: asset,
           delegate: this,
           previewThumbnailSize: previewThumbnailSize,
         );
         break;
       case AssetType.video:
-        _builder = VideoPageBuilder(
+        builder = VideoPageBuilder(
           asset: asset,
           delegate: this,
           hasOnlyOneVideoAndMoment: isWeChatMoment && hasVideo,
         );
         break;
       case AssetType.other:
-        _builder = Center(
+        builder = Center(
           child: ScaleText(
             textDelegate.unSupportedAssetType,
             semanticsLabel: semanticsTextDelegate.unSupportedAssetType,
@@ -443,14 +428,14 @@ class DefaultAssetPickerViewerBuilderDelegate
           Widget? w,
         ) {
           final bool isSelected =
-              (p?.currentlySelectedAssets ?? selectedAssets)?.contains(asset) ==
-                  true;
+              (p?.currentlySelectedAssets ?? selectedAssets)?.contains(asset) ??
+                  false;
           String hint = '';
           if (asset.type == AssetType.audio || asset.type == AssetType.video) {
             hint += '${semanticsTextDelegate.sNameDurationLabel}: ';
             hint += textDelegate.durationIndicatorBuilder(asset.videoDuration);
           }
-          if (asset.title?.isNotEmpty == true) {
+          if (asset.title?.isNotEmpty ?? false) {
             hint += ', ${asset.title}';
           }
           return Semantics(
@@ -464,7 +449,7 @@ class DefaultAssetPickerViewerBuilderDelegate
             child: w,
           );
         },
-        child: _builder,
+        child: builder,
       ),
     );
   }
@@ -541,7 +526,7 @@ class DefaultAssetPickerViewerBuilderDelegate
 
   @override
   Widget bottomDetailBuilder(BuildContext context) {
-    final Color _backgroundColor = themeData.primaryColor.withOpacity(.9);
+    final Color backgroundColor = themeData.primaryColor.withOpacity(.9);
     return ValueListenableBuilder2<bool, int>(
       firstNotifier: isDisplayingDetail,
       secondNotifier: selectedNotifier,
@@ -566,7 +551,7 @@ class DefaultAssetPickerViewerBuilderDelegate
                 builder: (_, int count, __) => Container(
                   width: count > 0 ? double.maxFinite : 0,
                   height: bottomPreviewHeight,
-                  color: _backgroundColor,
+                  color: backgroundColor,
                   child: ListView.builder(
                     controller: previewingListController,
                     scrollDirection: Axis.horizontal,
@@ -582,13 +567,8 @@ class DefaultAssetPickerViewerBuilderDelegate
               padding: const EdgeInsets.symmetric(horizontal: 20.0)
                   .copyWith(bottom: context.bottomPadding),
               decoration: BoxDecoration(
-                border: Border(
-                  top: BorderSide(
-                    width: 1.0,
-                    color: themeData.canvasColor,
-                  ),
-                ),
-                color: _backgroundColor,
+                border: Border(top: BorderSide(color: themeData.canvasColor)),
+                color: backgroundColor,
               ),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -645,7 +625,7 @@ class DefaultAssetPickerViewerBuilderDelegate
           builder: (_, AsyncSnapshot<int> snapshot) {
             final AssetEntity asset = selectedAssets!.elementAt(index);
             final bool isViewing = previewAssets[snapshot.data!] == asset;
-            final Widget _item = () {
+            final Widget item = () {
               switch (asset.type) {
                 case AssetType.image:
                   return _imagePreviewItem(asset);
@@ -653,7 +633,7 @@ class DefaultAssetPickerViewerBuilderDelegate
                   return _videoPreviewItem(asset);
                 case AssetType.audio:
                   return _audioPreviewItem(asset);
-                default:
+                case AssetType.other:
                   return const SizedBox.shrink();
               }
             }();
@@ -670,7 +650,7 @@ class DefaultAssetPickerViewerBuilderDelegate
                     List<AssetEntity>?>(
                   selector: (_, AssetPickerViewerProvider<AssetEntity>? p) =>
                       p?.currentlySelectedAssets,
-                  child: _item,
+                  child: item,
                   builder: (
                     _,
                     List<AssetEntity>? currentlySelectedAssets,
@@ -807,7 +787,7 @@ class DefaultAssetPickerViewerBuilderDelegate
         builder: (_, AssetPickerViewerProvider<AssetEntity>? provider, __) {
           assert(
             isWeChatMoment || provider != null,
-            'Viewer provider must not be null'
+            'Viewer provider must not be null '
             'when the special type is not WeChat moment.',
           );
           return MaterialButton(
@@ -823,6 +803,21 @@ class DefaultAssetPickerViewerBuilderDelegate
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(3.0),
             ),
+            onPressed: () {
+              if (isWeChatMoment && hasVideo) {
+                Navigator.of(context).pop(<AssetEntity>[currentAsset]);
+                return;
+              }
+              if (provider!.isSelectedNotEmpty) {
+                Navigator.of(context).pop(provider.currentlySelectedAssets);
+                return;
+              }
+              selectAsset(currentAsset);
+              Navigator.of(context).pop(
+                selectedAssets ?? <AssetEntity>[currentAsset],
+              );
+            },
+            materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
             child: ScaleText(
               () {
                 if (isWeChatMoment && hasVideo) {
@@ -854,21 +849,6 @@ class DefaultAssetPickerViewerBuilderDelegate
                 return semanticsTextDelegate.confirm;
               }(),
             ),
-            onPressed: () {
-              if (isWeChatMoment && hasVideo) {
-                Navigator.of(context).pop(<AssetEntity>[currentAsset]);
-                return;
-              }
-              if (provider!.isSelectedNotEmpty) {
-                Navigator.of(context).pop(provider.currentlySelectedAssets);
-                return;
-              }
-              selectAsset(currentAsset);
-              Navigator.of(context).pop(
-                selectedAssets ?? <AssetEntity>[currentAsset],
-              );
-            },
-            materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
           );
         },
       ),
@@ -985,7 +965,6 @@ class DefaultAssetPickerViewerBuilderDelegate
           currentIndex = index;
           pageStreamController.add(index);
         },
-        scrollDirection: Axis.horizontal,
       ),
     );
   }
