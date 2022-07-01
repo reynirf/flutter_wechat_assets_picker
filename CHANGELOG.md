@@ -4,6 +4,23 @@ that can be found in the LICENSE file. -->
 
 # Changelog
 
+## 7.3.2
+
+### Improvements
+
+- Improve `onChangingSelected` in `AssetPickerViewerBuilderDelegate`. (#332)
+- Fix typo in `README.md`. (#333)
+
+### Fixes
+
+- Fix behaviors when unselecting all assets in the viewer. (#335)
+
+## 7.3.1
+
+### Improvements
+
+- Improve selection callers between picker and viewer. (#327)
+
 ## 7.3.0
 
 Migrate to Flutter 3, drop supports for previous Flutter versions.
